@@ -1,10 +1,20 @@
 -- rawr.xyz
--- made softly by onlyonestands
+-- we made it - Onlyonestands
 
 
-local Bracket = loadstring(game:HttpGet("https://raw.githubusercontent.com/imcomingforyou6959-gif/rawr.xyz/refs/heads/main/UPI"))()
+local Bracket = (function()
+    local success, lib = pcall(function()
+        return loadstring(game:HttpGet("https://raw.githubusercontent.com/imcomingforyou6959-gif/rawr.xyz/refs/heads/main/UPI"))()
+    end)
+    return success and lib or nil
+end)()
 
--- Services
+if not Bracket then
+    warn("Failed to load UI library. Check your internet connection.")
+    return
+end
+
+
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -15,7 +25,7 @@ local Stats = game:GetService("Stats")
 local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
 
--- Helper functions
+
 local function getPing()
     return Stats.Network.ServerStatsItem["Data Ping"]:GetValue() / 1000
 end
@@ -28,6 +38,7 @@ local function hexToColor3(hex)
     return Color3.new(r, g, b)
 end
 
+-- Safe drawing helpers
 local function isDrawing(obj)
     return type(obj) == "table" and obj.Visible ~= nil
 end
@@ -35,12 +46,6 @@ end
 local function setVisible(obj, state)
     if isDrawing(obj) then
         pcall(function() obj.Visible = state end)
-    end
-end
-
-local function setColor(obj, color)
-    if isDrawing(obj) then
-        pcall(function() obj.Color = color end)
     end
 end
 
@@ -90,6 +95,7 @@ local function setCircle(circle, pos, radius, color, filled, thickness)
     end
 end
 
+
 local MOUSE_BUTTONS = {
     MouseButton1 = true,
     MouseButton2 = true,
@@ -99,13 +105,13 @@ local MOUSE_BUTTONS = {
     MiddleButton = true,
 }
 
--- Settings table
+
 local Settings = {
     Aimbot = {
         Enabled = false,
         Key = "RightButton",
         KeyEnum = Enum.UserInputType.MouseButton2,
-        Mode = "Crosshair",
+        Mode = "Crosshair",          -- "Crosshair" or "Distance"
         Smoothness = 0.3,
         FOV = 150,
         ShowFOV = true,
@@ -118,12 +124,20 @@ local Settings = {
         TargetPart = "Head",
         Prediction = 0.1,
         AutoPrediction = true,
-        SilentAim = false,          -- experimental: camera doesn't move, but target is selected
+        SilentAim = false,
         ShowTargetLine = false,
         HitPartList = {
             "Head", "HumanoidRootPart", "UpperTorso", "LowerTorso",
             "LeftHand", "RightHand", "LeftFoot", "RightFoot"
         },
+    },
+    Triggerbot = {
+        Enabled = false,
+        Delay = 0,
+        Range = 10,
+        OnKey = false,
+        Key = "RightButton",
+        KeyEnum = Enum.UserInputType.MouseButton2,
     },
     Visuals = {
         Enabled = false,
@@ -155,14 +169,11 @@ local Settings = {
         Radar = false,
         RadarSize = 150,
         RadarColor = "#FFFFFF",
-    },
-    Triggerbot = {
-        Enabled = false,
-        Delay = 0,
-        Range = 10,
-        OnKey = false,
-        Key = "RightButton",
-        KeyEnum = Enum.UserInputType.MouseButton2,
+        Chams = false,
+        ChamsColor = "#00FF00",
+        ViewAngle = false,
+        ViewAngleColor = "#FFFF00",
+        Rainbow = false,
     },
     Misc = {
         Walkspeed = { Enabled = false, Value = 16 },
@@ -184,6 +195,13 @@ local Settings = {
     }
 }
 
+-- Rainbow cycle
+local hue = 0
+local function getRainbowColor()
+    hue = (hue + 0.01) % 1
+    return Color3.fromHSV(hue, 1, 1)
+end
+
 -- Create Window
 local Window = Bracket:Window({
     Name = "rawr.xyz",
@@ -199,6 +217,7 @@ local AimbotTab = Window:Tab({ Name = "Aimbot" })
 local VisualsTab = Window:Tab({ Name = "Visuals" })
 local MiscTab = Window:Tab({ Name = "Misc" })
 local PlayersTab = Window:Tab({ Name = "Players" })
+
 
 local AimbotSection = AimbotTab:Section({ Name = "Aimbot", Side = "Left" })
 
@@ -346,7 +365,7 @@ AimbotSection:Dropdown({
     Callback = function(selected) Settings.Aimbot.TargetPart = selected[1] end,
 })
 
--- Triggerbot section
+
 local TriggerSection = AimbotTab:Section({ Name = "Triggerbot", Side = "Right" })
 
 TriggerSection:Toggle({
@@ -403,6 +422,7 @@ TriggerSection:Slider({
     Callback = function(v) Settings.Triggerbot.Delay = v end,
 })
 
+
 local GeneralSection = VisualsTab:Section({ Name = "General", Side = "Left" })
 
 GeneralSection:Toggle({
@@ -422,7 +442,7 @@ GeneralSection:Slider({
     Callback = function(v) Settings.Visuals.MaxDistance = v end,
 })
 
--- Box
+
 local BoxSection = VisualsTab:Section({ Name = "Box", Side = "Left" })
 
 BoxSection:Toggle({
@@ -446,6 +466,7 @@ BoxSection:Colorpicker({
     Callback = function(tbl, color) Settings.Visuals.BoxColor = "#" .. color:ToHex() end,
 })
 
+-- Tracer
 local TracerSection = VisualsTab:Section({ Name = "Tracer", Side = "Left" })
 
 TracerSection:Toggle({
@@ -462,6 +483,7 @@ TracerSection:Colorpicker({
     Callback = function(tbl, color) Settings.Visuals.TracerColor = "#" .. color:ToHex() end,
 })
 
+-- Health
 local HealthSection = VisualsTab:Section({ Name = "Health", Side = "Right" })
 
 HealthSection:Toggle({
@@ -484,6 +506,7 @@ HealthSection:Toggle({
     Value = false,
     Callback = function(v) Settings.Visuals.HealthText = v end,
 })
+
 
 local NameSection = VisualsTab:Section({ Name = "Name & Distance", Side = "Right" })
 
@@ -515,7 +538,7 @@ NameSection:Colorpicker({
     Callback = function(tbl, color) Settings.Visuals.DistanceColor = "#" .. color:ToHex() end,
 })
 
--- Weapon
+
 local WeaponSection = VisualsTab:Section({ Name = "Weapon", Side = "Left" })
 
 WeaponSection:Toggle({
@@ -532,7 +555,7 @@ WeaponSection:Colorpicker({
     Callback = function(tbl, color) Settings.Visuals.WeaponColor = "#" .. color:ToHex() end,
 })
 
--- Skeleton
+
 local SkeletonSection = VisualsTab:Section({ Name = "Skeleton", Side = "Left" })
 
 SkeletonSection:Toggle({
@@ -549,7 +572,7 @@ SkeletonSection:Colorpicker({
     Callback = function(tbl, color) Settings.Visuals.SkeletonColor = "#" .. color:ToHex() end,
 })
 
--- Corner Box
+
 local CornerSection = VisualsTab:Section({ Name = "Corner Box", Side = "Left" })
 
 CornerSection:Toggle({
@@ -586,6 +609,7 @@ CornerSection:Slider({
     Callback = function(v) Settings.Visuals.CornerBoxLengthFactor = v end,
 })
 
+
 local HeadDotSection = VisualsTab:Section({ Name = "Head Dot", Side = "Right" })
 
 HeadDotSection:Toggle({
@@ -619,7 +643,7 @@ HeadDotSection:Toggle({
     Callback = function(v) Settings.Visuals.HeadDotFilled = v end,
 })
 
--- Radar
+
 local RadarSection = VisualsTab:Section({ Name = "Radar", Side = "Right" })
 
 RadarSection:Toggle({
@@ -645,6 +669,51 @@ RadarSection:Colorpicker({
     Value = {0, 0, 1, 0, false},
     Callback = function(tbl, color) Settings.Visuals.RadarColor = "#" .. color:ToHex() end,
 })
+
+
+local ChamsSection = VisualsTab:Section({ Name = "Chams", Side = "Right" })
+
+ChamsSection:Toggle({
+    Name = "Enable Chams",
+    Flag = "VisualsChams",
+    Value = false,
+    Callback = function(v) Settings.Visuals.Chams = v end,
+})
+
+ChamsSection:Colorpicker({
+    Name = "Chams Color",
+    Flag = "ChamsColor",
+    Value = {0.333, 1, 1, 0, false},
+    Callback = function(tbl, color) Settings.Visuals.ChamsColor = "#" .. color:ToHex() end,
+})
+
+
+local ViewAngleSection = VisualsTab:Section({ Name = "View Angle", Side = "Right" })
+
+ViewAngleSection:Toggle({
+    Name = "Show View Angle",
+    Flag = "VisualsViewAngle",
+    Value = false,
+    Callback = function(v) Settings.Visuals.ViewAngle = v end,
+})
+
+ViewAngleSection:Colorpicker({
+    Name = "View Angle Color",
+    Flag = "ViewAngleColor",
+    Value = {0.166, 1, 1, 0, false},
+    Callback = function(tbl, color) Settings.Visuals.ViewAngleColor = "#" .. color:ToHex() end,
+})
+
+
+local RainbowSection = VisualsTab:Section({ Name = "Rainbow", Side = "Left" })
+
+RainbowSection:Toggle({
+    Name = "Rainbow ESP",
+    Flag = "VisualsRainbow",
+    Value = false,
+    Callback = function(v) Settings.Visuals.Rainbow = v end,
+})
+
 
 local MiscSection = MiscTab:Section({ Name = "Movement", Side = "Left" })
 
@@ -797,13 +866,11 @@ UISection:Button({
     Name = "Unload UI",
     Callback = function()
         pcall(function()
-            
             if FOVCircle and FOVCircle.Remove then FOVCircle:Remove() end
             if TargetLine and TargetLine.Remove then TargetLine:Remove() end
             if RadarCircle and RadarCircle.Remove then RadarCircle:Remove() end
             if RadarDot and RadarDot.Remove then RadarDot:Remove() end
 
-            
             for player, ui in pairs(ESPCache) do
                 if ui then
                     if ui.Box and ui.Box.Remove then ui.Box:Remove() end
@@ -813,6 +880,8 @@ UISection:Button({
                     if ui.HeadDot and ui.HeadDot.Remove then ui.HeadDot:Remove() end
                     if ui.Weapon and ui.Weapon.Remove then ui.Weapon:Remove() end
                     if ui.HealthText and ui.HealthText.Remove then ui.HealthText:Remove() end
+                    if ui.ViewAngle and ui.ViewAngle.Remove then ui.ViewAngle:Remove() end
+                    if ui.Chams and ui.Chams.Remove then ui.Chams:Remove() end
                     if ui.Skeleton then
                         for _, line in pairs(ui.Skeleton) do if line and line.Remove then line:Remove() end end
                     end
@@ -825,12 +894,9 @@ UISection:Button({
                 end
             end
 
-            -- Stop animation
             if Settings.Animation.CurrentTrack and Settings.Animation.CurrentTrack.Stop then
                 Settings.Animation.CurrentTrack:Stop()
             end
-
-            -- Destroy window
             if Window and Window.Instance then Window.Instance:Destroy() end
             if Bracket and Bracket.Screen then Bracket.Screen:Destroy() end
             print("rawr.xyz unloaded.")
@@ -838,7 +904,7 @@ UISection:Button({
     end,
 })
 
--- Animation Player
+
 local AnimSection = MiscTab:Section({ Name = "Animation Player", Side = "Left" })
 
 AnimSection:Textbox({
@@ -906,19 +972,26 @@ if LocalPlayer then
     end)
 end
 
+
 local PlayerSection = PlayersTab:Section({ Name = "Player Actions", Side = "Left" })
 
 PlayerSection:Textbox({
     Name = "Player Name",
     Flag = "PlayerNameInput",
-    Placeholder = "Enter exact username",
+    Placeholder = "Enter username or display name",
     Callback = function(v)
         Settings.Players.SelectedName = v
     end,
 })
 
-local function getSelectedPlayer()
-    return Players:FindFirstChild(Settings.Players.SelectedName)
+local function findPlayerByName(name)
+    if name == "" then return nil end
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p.Name:lower() == name:lower() or (p.DisplayName and p.DisplayName:lower() == name:lower()) then
+            return p
+        end
+    end
+    return nil
 end
 
 local spectating = false
@@ -935,26 +1008,27 @@ PlayerSection:Toggle({
     Flag = "SpectateToggle",
     Value = false,
     Callback = function(v)
-        if v then
-            local target = getSelectedPlayer()
-            if target and target.Character and target.Character:FindFirstChildOfClass("Humanoid") then
-                Camera.CameraSubject = target.Character:FindFirstChildOfClass("Humanoid")
-                spectating = true
-                Settings.Players.Spectating = true
+        task.spawn(function()
+            if v then
+                local target = findPlayerByName(Settings.Players.SelectedName)
+                if target and target.Character and target.Character:FindFirstChildOfClass("Humanoid") then
+                    Camera.CameraSubject = target.Character:FindFirstChildOfClass("Humanoid")
+                    spectating = true
+                    Settings.Players.Spectating = true
+                else
+                    v = false
+                end
             else
-                -- Can't spectate, turn off toggle
-                v = false
+                stopSpectating()
             end
-        else
-            stopSpectating()
-        end
+        end)
     end,
 })
 
 PlayerSection:Button({
     Name = "Teleport to Player",
     Callback = function()
-        local target = getSelectedPlayer()
+        local target = findPlayerByName(Settings.Players.SelectedName)
         if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
             local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
             if hrp then
@@ -965,9 +1039,19 @@ PlayerSection:Button({
 })
 
 PlayerSection:Button({
+    Name = "Copy Username",
+    Callback = function()
+        local target = findPlayerByName(Settings.Players.SelectedName)
+        if target and setclipboard then
+            setclipboard(target.Name)
+        end
+    end,
+})
+
+PlayerSection:Button({
     Name = "Copy User ID",
     Callback = function()
-        local target = getSelectedPlayer()
+        local target = findPlayerByName(Settings.Players.SelectedName)
         if target and setclipboard then
             setclipboard(tostring(target.UserId))
         end
@@ -977,7 +1061,7 @@ PlayerSection:Button({
 PlayerSection:Button({
     Name = "Open Profile (Browser)",
     Callback = function()
-        local target = getSelectedPlayer()
+        local target = findPlayerByName(Settings.Players.SelectedName)
         if target then
             local url = "https://www.roblox.com/users/" .. target.UserId .. "/profile"
             if syn and syn.request then
@@ -990,15 +1074,29 @@ PlayerSection:Button({
     end,
 })
 
-local function onTargetRemoved()
-    if spectating then
-        stopSpectating()
-    end
-end
+PlayerSection:Button({
+    Name = "View Tools",
+    Callback = function()
+        local target = findPlayerByName(Settings.Players.SelectedName)
+        if target and target.Character then
+            local tools = {}
+            for _, child in ipairs(target.Character:GetChildren()) do
+                if child:IsA("Tool") then
+                    table.insert(tools, child.Name)
+                end
+            end
+            if #tools > 0 then
+                print(target.Name .. "'s tools: " .. table.concat(tools, ", "))
+            else
+                print(target.Name .. " has no tools equipped.")
+            end
+        end
+    end,
+})
 
 Players.PlayerRemoving:Connect(function(p)
-    if p.Name == Settings.Players.SelectedName then
-        onTargetRemoved()
+    if p == findPlayerByName(Settings.Players.SelectedName) then
+        stopSpectating()
     end
 end)
 
@@ -1007,6 +1105,7 @@ if LocalPlayer.Character then
         if spectating then stopSpectating() end
     end)
 end
+
 
 local FOVCircle = Drawing.new("Circle")
 if isDrawing(FOVCircle) then
@@ -1040,6 +1139,7 @@ if isDrawing(RadarDot) then
     RadarDot.Color = Color3.new(1,1,1)
     RadarDot.Visible = false
 end
+
 
 local function IsEnemy(player)
     if player == LocalPlayer then return false end
@@ -1142,7 +1242,6 @@ local function updateKeyState()
     end
 end
 
--- Triggerbot key state
 local triggerKeyPressed = false
 local function updateTriggerKeyState()
     local key = Settings.Triggerbot.KeyEnum
@@ -1158,7 +1257,6 @@ local function updateTriggerKeyState()
     end
 end
 
--- Triggerbot
 local lastTriggerTime = 0
 local function doTrigger()
     if not Settings.Triggerbot.Enabled then return end
@@ -1226,6 +1324,7 @@ local function updateSit()
     end
 end
 
+
 UserInputService.InputBegan:Connect(function(input, gpe)
     if gpe then return end
     if (input.KeyCode == Settings.UI.ToggleKey) or (input.UserInputType == Settings.UI.ToggleKey) then
@@ -1272,9 +1371,9 @@ RunService.RenderStepped:Connect(function()
         setVisible(TargetLine, false)
     end
 
+    
     if targetPart and Settings.Aimbot.SilentAim then
-        -- Here you could implement a custom mouse target override
-        -- For now, we just don't move camera
+        -- No camera movement
     elseif targetPart and not Settings.Aimbot.SilentAim then
         local targetPos = GetPredictedPosition(targetPart)
         if targetPos then
@@ -1301,6 +1400,11 @@ local function hideESP(ui)
     setVisible(ui.HeadDot, false)
     setVisible(ui.Weapon, false)
     setVisible(ui.HealthText, false)
+    setVisible(ui.ViewAngle, false)
+
+    if ui.Chams and ui.Chams.Remove then
+        pcall(ui.Chams.Remove, ui.Chams)
+    end
 
     if ui.Skeleton then
         for _, line in pairs(ui.Skeleton) do setVisible(line, false) end
@@ -1327,6 +1431,8 @@ local function cleanESP(player)
     if ui.HeadDot and ui.HeadDot.Remove then pcall(ui.HeadDot.Remove, ui.HeadDot) end
     if ui.Weapon and ui.Weapon.Remove then pcall(ui.Weapon.Remove, ui.Weapon) end
     if ui.HealthText and ui.HealthText.Remove then pcall(ui.HealthText.Remove, ui.HealthText) end
+    if ui.ViewAngle and ui.ViewAngle.Remove then pcall(ui.ViewAngle.Remove, ui.ViewAngle) end
+    if ui.Chams and ui.Chams.Remove then pcall(ui.Chams.Remove, ui.Chams) end
     if ui.Skeleton then
         for _, line in pairs(ui.Skeleton) do if line and line.Remove then pcall(line.Remove, line) end end
     end
@@ -1339,55 +1445,83 @@ local function cleanESP(player)
     ESPCache[player] = nil
 end
 
+
 local function createESP(player)
     if player == LocalPlayer then return end
     if ESPCache[player] then return end
 
-    local function safeDrawing(type)
-        local success, obj = pcall(Drawing.new, type)
-        return success and obj or nil
-    end
+    task.spawn(function()
+        local function safeDrawing(type)
+            local success, obj = pcall(Drawing.new, type)
+            return success and obj or nil
+        end
 
-    local box = safeDrawing("Square")
-    local tracer = safeDrawing("Line")
-    local health = safeDrawing("Line")
-    local nameObj = safeDrawing("Text")
-    local headDot = safeDrawing("Circle")
-    local weapon = safeDrawing("Text")
-    local healthText = safeDrawing("Text")
+        local box = safeDrawing("Square")
+        local tracer = safeDrawing("Line")
+        local health = safeDrawing("Line")
+        local nameObj = safeDrawing("Text")
+        local headDot = safeDrawing("Circle")
+        local weapon = safeDrawing("Text")
+        local healthText = safeDrawing("Text")
+        local viewAngle = safeDrawing("Line")
 
-    if box then box.Thickness = 1; box.Filled = false; box.Visible = false end
-    if tracer then tracer.Thickness = 1; tracer.Visible = false end
-    if health then health.Thickness = 3; health.Visible = false end
-    if nameObj then nameObj.Size = 13; nameObj.Center = true; nameObj.Outline = true; nameObj.Font = 2; nameObj.Visible = false end
-    if headDot then headDot.Visible = false; headDot.NumSides = 30 end
-    if weapon then weapon.Size = 12; weapon.Center = true; weapon.Outline = true; weapon.Font = 2; weapon.Visible = false end
-    if healthText then healthText.Size = 12; healthText.Center = true; healthText.Outline = true; healthText.Font = 2; healthText.Visible = false end
+        if box then box.Thickness = 1; box.Filled = false; box.Visible = false end
+        if tracer then tracer.Thickness = 1; tracer.Visible = false end
+        if health then health.Thickness = 3; health.Visible = false end
+        if nameObj then nameObj.Size = 13; nameObj.Center = true; nameObj.Outline = true; nameObj.Font = 2; nameObj.Visible = false end
+        if headDot then headDot.Visible = false; headDot.NumSides = 30 end
+        if weapon then weapon.Size = 12; weapon.Center = true; weapon.Outline = true; weapon.Font = 2; weapon.Visible = false end
+        if healthText then healthText.Size = 12; healthText.Center = true; healthText.Outline = true; healthText.Font = 2; healthText.Visible = false end
+        if viewAngle then viewAngle.Thickness = 1; viewAngle.Visible = false end
 
-    ESPCache[player] = {
-        Box = box,
-        Tracer = tracer,
-        Health = health,
-        Name = nameObj,
-        HeadDot = headDot,
-        Weapon = weapon,
-        HealthText = healthText,
-        Skeleton = {},
-        Box3D = {},
-        CornerLines = nil,
-        LastPosition = nil,
-        StuckTime = 0,
-    }
-
-    if player and player.CharacterRemoving then
-        player.CharacterRemoving:Connect(function()
-            if ESPCache[player] then hideESP(ESPCache[player]) end
+        local chams
+        pcall(function()
+            chams = Instance.new("Highlight")
+            chams.FillTransparency = 0.5
+            chams.OutlineTransparency = 1
+            chams.FillColor = hexToColor3(Settings.Visuals.ChamsColor)
+            chams.Parent = player.Character
+            chams.Enabled = false
         end)
-    end
+
+        ESPCache[player] = {
+            Box = box,
+            Tracer = tracer,
+            Health = health,
+            Name = nameObj,
+            HeadDot = headDot,
+            Weapon = weapon,
+            HealthText = healthText,
+            ViewAngle = viewAngle,
+            Chams = chams,
+            Skeleton = {},
+            Box3D = {},
+            CornerLines = nil,
+            LastPosition = nil,
+            StuckTime = 0,
+        }
+
+        if player and player.CharacterRemoving then
+            player.CharacterRemoving:Connect(function()
+                if ESPCache[player] then hideESP(ESPCache[player]) end
+            end)
+        end
+    end)
 end
 
-for _, p in pairs(Players:GetPlayers()) do createESP(p) end
-Players.PlayerAdded:Connect(createESP)
+for _, p in ipairs(Players:GetPlayers()) do
+    task.spawn(function()
+        createESP(p)
+        task.wait() -- yield to avoid freezing
+    end)
+end
+
+Players.PlayerAdded:Connect(function(p)
+    task.spawn(function()
+        createESP(p)
+    end)
+end)
+
 Players.PlayerRemoving:Connect(cleanESP)
 
 local function findCharacter(player)
@@ -1591,6 +1725,23 @@ end
 local MAX_STUCK_TIME = 1.5
 
 RunService.RenderStepped:Connect(function(dt)
+    
+    if Settings.Visuals.Rainbow then
+        local rainbow = getRainbowColor()
+        Settings.Visuals.BoxColor = "#" .. rainbow:ToHex()
+        Settings.Visuals.TracerColor = "#" .. rainbow:ToHex()
+        Settings.Visuals.HealthColor = "#" .. rainbow:ToHex()
+        Settings.Visuals.NameColor = "#" .. rainbow:ToHex()
+        Settings.Visuals.DistanceColor = "#" .. rainbow:ToHex()
+        Settings.Visuals.WeaponColor = "#" .. rainbow:ToHex()
+        Settings.Visuals.SkeletonColor = "#" .. rainbow:ToHex()
+        Settings.Visuals.CornerBoxColor = "#" .. rainbow:ToHex()
+        Settings.Visuals.HeadDotColor = "#" .. rainbow:ToHex()
+        Settings.Visuals.RadarColor = "#" .. rainbow:ToHex()
+        Settings.Visuals.ChamsColor = "#" .. rainbow:ToHex()
+        Settings.Visuals.ViewAngleColor = "#" .. rainbow:ToHex()
+    end
+
     if not Settings.Visuals.Enabled then
         for _, ui in pairs(ESPCache) do if ui then hideESP(ui) end end
         return
@@ -1605,6 +1756,15 @@ RunService.RenderStepped:Connect(function(dt)
         local character, humanoid, root = findCharacter(player)
         if not character or not humanoid or humanoid.Health <= 0 then
             hideESP(ui); continue
+        end
+
+        -- Chams
+        if Settings.Visuals.Chams and ui.Chams then
+            ui.Chams.Enabled = true
+            ui.Chams.FillColor = hexToColor3(Settings.Visuals.ChamsColor)
+            ui.Chams.Parent = character
+        elseif ui.Chams then
+            ui.Chams.Enabled = false
         end
 
         local pos, width, height = getBox(character)
@@ -1630,17 +1790,17 @@ RunService.RenderStepped:Connect(function(dt)
             hideESP(ui); continue
         end
 
-        -- 2D Box
+        
         if Settings.Visuals.Box then
             setBox(ui.Box, Vector2.new(width, height), pos, hexToColor3(Settings.Visuals.BoxColor))
         else
             setVisible(ui.Box, false)
         end
 
-        -- 3D Box
+        
         draw3DBox(player, ui, character, hexToColor3(Settings.Visuals.BoxColor))
 
-        -- Health bar
+        
         if Settings.Visuals.Health then
             local hp = humanoid.Health / humanoid.MaxHealth
             local healthHeight = height * hp
@@ -1652,7 +1812,7 @@ RunService.RenderStepped:Connect(function(dt)
             setVisible(ui.Health, false)
         end
 
-        -- Tracer
+        
         if Settings.Visuals.Tracer then
             setLine(ui.Tracer,
                 Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y),
@@ -1662,7 +1822,7 @@ RunService.RenderStepped:Connect(function(dt)
             setVisible(ui.Tracer, false)
         end
 
-        -- Name & Distance
+        
         if Settings.Visuals.Name or Settings.Visuals.Distance then
             local distText = ""
             if Settings.Visuals.Distance and myPos then
@@ -1674,7 +1834,7 @@ RunService.RenderStepped:Connect(function(dt)
             setVisible(ui.Name, false)
         end
 
-        -- Weapon
+        
         if Settings.Visuals.Weapon then
             local weaponName = getWeaponName(character)
             if weaponName ~= "" then
@@ -1697,10 +1857,10 @@ RunService.RenderStepped:Connect(function(dt)
         -- Skeleton
         drawSkeleton(player, ui, character, hexToColor3(Settings.Visuals.SkeletonColor))
 
-        -- Corner Box
+        
         drawCornerBox(player, ui)
 
-        -- Head Dot
+        
         if Settings.Visuals.HeadDot then
             local head = character:FindFirstChild("Head")
             if head then
@@ -1720,10 +1880,32 @@ RunService.RenderStepped:Connect(function(dt)
         else
             setVisible(ui.HeadDot, false)
         end
+
+        
+        if Settings.Visuals.ViewAngle then
+            local head = character:FindFirstChild("Head")
+            if head then
+                local lookVector = head.CFrame.LookVector * 5
+                local endPos = head.Position + lookVector
+                local startScreen, startVis = Camera:WorldToViewportPoint(head.Position)
+                local endScreen, endVis = Camera:WorldToViewportPoint(endPos)
+                if startVis and endVis then
+                    setLine(ui.ViewAngle,
+                        Vector2.new(startScreen.X, startScreen.Y),
+                        Vector2.new(endScreen.X, endScreen.Y),
+                        hexToColor3(Settings.Visuals.ViewAngleColor))
+                else
+                    setVisible(ui.ViewAngle, false)
+                end
+            else
+                setVisible(ui.ViewAngle, false)
+            end
+        else
+            setVisible(ui.ViewAngle, false)
+        end
     end
 end)
 
---------------------- RADAR ---------------------
 RunService.RenderStepped:Connect(function()
     if Settings.Visuals.Radar and Settings.Visuals.Enabled then
         local center = Vector2.new(Camera.ViewportSize.X - 100, 100)
@@ -1733,7 +1915,8 @@ RunService.RenderStepped:Connect(function()
 
         local myPos = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
         if myPos then
-            local cameraHeading = -Camera.CFrame.LookVector.XZ:Angle()  -- Y rotation
+            local look = Camera.CFrame.LookVector
+            local angle = math.atan2(-look.X, -look.Z)
 
             for player, ui in pairs(ESPCache) do
                 if player and player.Character then
@@ -1743,13 +1926,11 @@ RunService.RenderStepped:Connect(function()
                     local root = player.Character:FindFirstChild("HumanoidRootPart")
                     if root then
                         local relPos = root.Position - myPos.Position
-                        -- Rotate relative position by camera heading
-                        local rotated = Vector2.new(
-                            relPos.X * math.cos(cameraHeading) - relPos.Z * math.sin(cameraHeading),
-                            relPos.X * math.sin(cameraHeading) + relPos.Z * math.cos(cameraHeading)
-                        )
-                        -- Scale and clamp to radar circle
-                        local scale = (size/2) / 100  -- 100 studs = half radar size (adjust as needed)
+                        local rotatedX = relPos.X * math.cos(angle) - relPos.Z * math.sin(angle)
+                        local rotatedZ = relPos.X * math.sin(angle) + relPos.Z * math.cos(angle)
+                        local rotated = Vector2.new(rotatedX, rotatedZ)
+
+                        local scale = (size/2) / 100
                         local screenPos = center + rotated * scale
                         local dir = screenPos - center
                         if dir.Magnitude > size/2 then
@@ -1767,4 +1948,5 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
-print("rawr.xyz fully loaded – all features fixed and working!")
+print("rawr.xyz did it again")
+print("have fun little man.")
