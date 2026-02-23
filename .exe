@@ -1,6 +1,5 @@
--- rawr.xyz
--- rawr did it too u - onlyonestands
-
+-- rawr.xyz owns u
+-- onlyonestands :8)
 
 local Bracket = (function()
     local success, lib = pcall(function()
@@ -8,13 +7,8 @@ local Bracket = (function()
     end)
     return success and lib or nil
 end)()
+if not Bracket then return end
 
-if not Bracket then
-    warn("Failed to load UI library. Check your internet connection.")
-    return
-end
-
--- Services
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -24,8 +18,9 @@ local Workspace = game:GetService("Workspace")
 local Stats = game:GetService("Stats")
 local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
+local StarterGui = game:GetService("StarterGui")
+local TweenService = game:GetService("TweenService")
 
--- Helper functions
 local function getPing()
     return Stats.Network.ServerStatsItem["Data Ping"]:GetValue() / 1000
 end
@@ -37,7 +32,6 @@ local function hexToColor3(hex)
     local b = tonumber("0x" .. hex:sub(5,6)) / 255
     return Color3.new(r, g, b)
 end
-
 
 local function isDrawing(obj)
     return type(obj) == "table" and obj.Visible ~= nil
@@ -97,7 +91,6 @@ local function setCircle(circle, pos, radius, color, filled, thickness)
     end
 end
 
--- Known mouse button strings
 local MOUSE_BUTTONS = {
     MouseButton1 = true,
     MouseButton2 = true,
@@ -107,14 +100,14 @@ local MOUSE_BUTTONS = {
     MiddleButton = true,
 }
 
--- Settings table (full)
 local Settings = {
     Aimbot = {
         Enabled = false,
         Key = "RightButton",
         KeyEnum = Enum.UserInputType.MouseButton2,
-        Mode = "Crosshair",          -- "Crosshair" or "Distance"
+        Mode = "Crosshair",
         Smoothness = 0.3,
+        HardLock = false,
         FOV = 150,
         ShowFOV = true,
         FOVFilled = false,
@@ -128,9 +121,26 @@ local Settings = {
         AutoPrediction = true,
         SilentAim = false,
         ShowTargetLine = false,
+        StickyAim = false,
+        StickyKey = "L",
+        StickyKeyEnum = Enum.KeyCode.L,
+        StickyTarget = nil,
         HitPartList = {
             "Head", "HumanoidRootPart", "UpperTorso", "LowerTorso",
             "LeftHand", "RightHand", "LeftFoot", "RightFoot"
+        },
+        Orbit = {
+            Enabled = false,
+            Key = "O",
+            KeyEnum = Enum.KeyCode.O,
+            Speed = 5,
+            Position = "Normal",
+            OriginalCFrame = nil,
+        },
+        LockIndicator = {
+            Enabled = false,
+            Color = "#FF00FF",
+            Pulse = false,
         },
     },
     Triggerbot = {
@@ -152,12 +162,12 @@ local Settings = {
         Tracer = true,
         TracerColor = "#FFFFFF",
         TracerThickness = 1,
-        TracerOrigin = "Crosshair",  -- "Crosshair", "Bottom Center", "Top Center", "Left Center", "Right Center"
+        TracerOrigin = "Crosshair",
         Health = true,
         HealthColor = "#00FF00",
         HealthGradient = true,
         HealthBackground = true,
-        HealthPosition = "Left",      -- "Left", "Right", "Top", "Bottom"
+        HealthPosition = "Left",
         HealthText = false,
         Name = true,
         NameColor = "#FFFFFF",
@@ -165,7 +175,7 @@ local Settings = {
         Distance = true,
         DistanceColor = "#FFFFFF",
         DistanceColorByDistance = true,
-        DistanceUnit = "Studs",       -- "Studs", "Meters (approx)", "Feet (approx)"
+        DistanceUnit = "Studs",
         Weapon = false,
         WeaponColor = "#FFFF00",
         Skeleton = false,
@@ -192,12 +202,21 @@ local Settings = {
         Rainbow = false,
         EnemyColor = "#FF0000",
         TeamColor = "#00FF00",
+        DamageIndicators = false,
+        Hitmarkers = false,
+        HitEffect = false,
+        HitEffectColor = "#FFFFFF",
     },
     Misc = {
         Walkspeed = { Enabled = false, Value = 16 },
         JumpPower = { Enabled = false, Value = 50 },
         CFrameSpeed = { Enabled = false, Value = 10 },
         Sit = false,
+        ThirdPerson = false,
+        BHop = false,
+        NoClip = false,
+        Freecam = false,
+        FOV = 70,
     },
     UI = {
         ToggleKey = Enum.KeyCode.RightAlt,
@@ -213,13 +232,11 @@ local Settings = {
     }
 }
 
-
 local hue = 0
 local function getRainbowColor()
     hue = (hue + 0.01) % 1
     return Color3.fromHSV(hue, 1, 1)
 end
-
 
 local function getHealthColor(health, maxHealth)
     if not Settings.Visuals.HealthGradient then
@@ -229,7 +246,6 @@ local function getHealthColor(health, maxHealth)
     return Color3.new(1 - percent, percent, 0)
 end
 
--- Distance-based color
 local function getDistanceColor(dist)
     if not Settings.Visuals.DistanceColorByDistance then
         return hexToColor3(Settings.Visuals.DistanceColor)
@@ -238,16 +254,25 @@ local function getDistanceColor(dist)
     return Color3.new(percent, 1 - percent, 0)
 end
 
-
 local function getPlayerColor(player)
-    if player.Team == LocalPlayer.Team then
+    if player == LocalPlayer then
+        return Color3.new(0, 1, 0)
+    elseif player.Team == LocalPlayer.Team then
         return hexToColor3(Settings.Visuals.TeamColor)
     else
         return hexToColor3(Settings.Visuals.EnemyColor)
     end
 end
 
--- Create Window
+local function notify(message, duration)
+    duration = duration or 2
+    StarterGui:SetCore("SendNotification", {
+        Title = "rawr.xyz",
+        Text = message,
+        Duration = duration
+    })
+end
+
 local Window = Bracket:Window({
     Name = "rawr.xyz",
     Position = UDim2.new(0.5, -250, 0.5, -200),
@@ -257,12 +282,10 @@ local Window = Bracket:Window({
 })
 Window.Enabled = true
 
--- Create Tabs
 local AimbotTab = Window:Tab({ Name = "Aimbot" })
 local VisualsTab = Window:Tab({ Name = "Visuals" })
 local MiscTab = Window:Tab({ Name = "Misc" })
 local PlayersTab = Window:Tab({ Name = "Players" })
-
 
 local AimbotSection = AimbotTab:Section({ Name = "Aimbot", Side = "Left" })
 
@@ -291,6 +314,109 @@ AimbotSection:Keybind({
             if success then Settings.Aimbot.KeyEnum = result end
         end
     end,
+})
+
+AimbotSection:Toggle({
+    Name = "Sticky Aim (lock onto target)",
+    Flag = "StickyAim",
+    Value = false,
+    Callback = function(v) Settings.Aimbot.StickyAim = v end,
+})
+
+AimbotSection:Keybind({
+    Name = "Sticky Key (toggle lock)",
+    Flag = "StickyKey",
+    Value = Settings.Aimbot.StickyKey,
+    Mouse = true,
+    Callback = function(key, pressed, toggle)
+        if pressed and not toggle then
+            Settings.Aimbot.StickyKey = key
+            local success, result = pcall(function()
+                if MOUSE_BUTTONS[key] then
+                    return Enum.UserInputType[key]
+                else
+                    return Enum.KeyCode[key]
+                end
+            end)
+            if success then Settings.Aimbot.StickyKeyEnum = result end
+        end
+    end,
+})
+
+AimbotSection:Toggle({
+    Name = "Hard Lock (instant snap)",
+    Flag = "HardLock",
+    Value = false,
+    Callback = function(v) Settings.Aimbot.HardLock = v end,
+})
+
+local OrbitSection = AimbotTab:Section({ Name = "Orbit Aimbot", Side = "Right" })
+OrbitSection:Toggle({
+    Name = "Enable Orbit",
+    Flag = "OrbitEnabled",
+    Value = false,
+    Callback = function(v) Settings.Aimbot.Orbit.Enabled = v end,
+})
+OrbitSection:Keybind({
+    Name = "Orbit Key (hold to orbit)",
+    Flag = "OrbitKey",
+    Value = Settings.Aimbot.Orbit.Key,
+    Mouse = true,
+    Callback = function(key, pressed, toggle)
+        if pressed and not toggle then
+            Settings.Aimbot.Orbit.Key = key
+            local success, result = pcall(function()
+                if MOUSE_BUTTONS[key] then
+                    return Enum.UserInputType[key]
+                else
+                    return Enum.KeyCode[key]
+                end
+            end)
+            if success then Settings.Aimbot.Orbit.KeyEnum = result end
+        end
+    end,
+})
+OrbitSection:Slider({
+    Name = "Orbit Speed",
+    Flag = "OrbitSpeed",
+    Min = 1,
+    Max = 20,
+    Value = 5,
+    Precise = 1,
+    Callback = function(v) Settings.Aimbot.Orbit.Speed = v end,
+})
+OrbitSection:Dropdown({
+    Name = "Orbit Position",
+    Flag = "OrbitPosition",
+    List = {
+        { Name = "Head", Mode = "Button" },
+        { Name = "Chest", Mode = "Button" },
+        { Name = "Normal", Mode = "Button" },
+        { Name = "Legs", Mode = "Button" },
+    },
+    Callback = function(selected)
+        Settings.Aimbot.Orbit.Position = selected[1]
+    end,
+})
+
+local LockIndicatorSection = AimbotTab:Section({ Name = "Lock Indicator", Side = "Right" })
+LockIndicatorSection:Toggle({
+    Name = "Enable Lock Indicator",
+    Flag = "LockIndicator",
+    Value = false,
+    Callback = function(v) Settings.Aimbot.LockIndicator.Enabled = v end,
+})
+LockIndicatorSection:Colorpicker({
+    Name = "Indicator Color",
+    Flag = "LockColor",
+    Value = {0.833, 1, 1, 0, false},
+    Callback = function(tbl, color) Settings.Aimbot.LockIndicator.Color = "#" .. color:ToHex() end,
+})
+LockIndicatorSection:Toggle({
+    Name = "Pulse Effect",
+    Flag = "LockPulse",
+    Value = false,
+    Callback = function(v) Settings.Aimbot.LockIndicator.Pulse = v end,
 })
 
 AimbotSection:Dropdown({
@@ -407,10 +533,13 @@ AimbotSection:Dropdown({
     Name = "Target Part",
     Flag = "AimbotTargetPart",
     List = partList,
-    Callback = function(selected) Settings.Aimbot.TargetPart = selected[1] end,
+    Callback = function(selected)
+        if selected and #selected > 0 then
+            Settings.Aimbot.TargetPart = selected[1]
+        end
+    end,
 })
 
--- Triggerbot section
 local TriggerSection = AimbotTab:Section({ Name = "Triggerbot", Side = "Right" })
 
 TriggerSection:Toggle({
@@ -477,16 +606,13 @@ TriggerSection:Slider({
     Callback = function(v) Settings.Triggerbot.RandomDelay = v end,
 })
 
-
 local GeneralSection = VisualsTab:Section({ Name = "General", Side = "Left" })
-
 GeneralSection:Toggle({
     Name = "Enable ESP",
     Flag = "VisualsEnabled",
     Value = false,
     Callback = function(v) Settings.Visuals.Enabled = v end,
 })
-
 GeneralSection:Slider({
     Name = "Max Distance",
     Flag = "VisualsMaxDistance",
@@ -497,23 +623,19 @@ GeneralSection:Slider({
     Callback = function(v) Settings.Visuals.MaxDistance = v end,
 })
 
--- Box
 local BoxSection = VisualsTab:Section({ Name = "Box", Side = "Left" })
-
 BoxSection:Toggle({
     Name = "2D Box",
     Flag = "VisualsBox",
     Value = true,
     Callback = function(v) Settings.Visuals.Box = v end,
 })
-
 BoxSection:Colorpicker({
     Name = "Box Color",
     Flag = "VisualsBoxColor",
     Value = {0, 1, 1, 0, false},
     Callback = function(tbl, color) Settings.Visuals.BoxColor = "#" .. color:ToHex() end,
 })
-
 BoxSection:Slider({
     Name = "Box Thickness",
     Flag = "BoxThickness",
@@ -523,7 +645,6 @@ BoxSection:Slider({
     Precise = 0,
     Callback = function(v) Settings.Visuals.BoxThickness = v end,
 })
-
 BoxSection:Toggle({
     Name = "3D Box",
     Flag = "VisualsBox3D",
@@ -531,23 +652,19 @@ BoxSection:Toggle({
     Callback = function(v) Settings.Visuals.Box3D = v end,
 })
 
--- Tracer
 local TracerSection = VisualsTab:Section({ Name = "Tracer", Side = "Left" })
-
 TracerSection:Toggle({
     Name = "Tracer",
     Flag = "VisualsTracer",
     Value = true,
     Callback = function(v) Settings.Visuals.Tracer = v end,
 })
-
 TracerSection:Colorpicker({
     Name = "Tracer Color",
     Flag = "VisualsTracerColor",
     Value = {0, 0, 1, 0, false},
     Callback = function(tbl, color) Settings.Visuals.TracerColor = "#" .. color:ToHex() end,
 })
-
 TracerSection:Slider({
     Name = "Tracer Thickness",
     Flag = "TracerThickness",
@@ -557,7 +674,6 @@ TracerSection:Slider({
     Precise = 0,
     Callback = function(v) Settings.Visuals.TracerThickness = v end,
 })
-
 TracerSection:Dropdown({
     Name = "Tracer Origin",
     Flag = "TracerOrigin",
@@ -573,37 +689,31 @@ TracerSection:Dropdown({
     end,
 })
 
--- Health
 local HealthSection = VisualsTab:Section({ Name = "Health", Side = "Right" })
-
 HealthSection:Toggle({
     Name = "Health Bar",
     Flag = "VisualsHealth",
     Value = true,
     Callback = function(v) Settings.Visuals.Health = v end,
 })
-
 HealthSection:Toggle({
     Name = "Health Gradient",
     Flag = "HealthGradient",
     Value = true,
     Callback = function(v) Settings.Visuals.HealthGradient = v end,
 })
-
 HealthSection:Toggle({
     Name = "Health Background",
     Flag = "HealthBackground",
     Value = true,
     Callback = function(v) Settings.Visuals.HealthBackground = v end,
 })
-
 HealthSection:Colorpicker({
     Name = "Health Color",
     Flag = "VisualsHealthColor",
     Value = {0.333, 1, 1, 0, false},
     Callback = function(tbl, color) Settings.Visuals.HealthColor = "#" .. color:ToHex() end,
 })
-
 HealthSection:Dropdown({
     Name = "Health Bar Position",
     Flag = "HealthPosition",
@@ -617,7 +727,6 @@ HealthSection:Dropdown({
         Settings.Visuals.HealthPosition = selected[1]
     end,
 })
-
 HealthSection:Toggle({
     Name = "Health Text",
     Flag = "VisualsHealthText",
@@ -625,51 +734,43 @@ HealthSection:Toggle({
     Callback = function(v) Settings.Visuals.HealthText = v end,
 })
 
-
 local NameSection = VisualsTab:Section({ Name = "Name & Distance", Side = "Right" })
-
 NameSection:Toggle({
     Name = "Name",
     Flag = "VisualsName",
     Value = true,
     Callback = function(v) Settings.Visuals.Name = v end,
 })
-
 NameSection:Toggle({
     Name = "Team Icon",
     Flag = "TeamIcon",
     Value = true,
     Callback = function(v) Settings.Visuals.TeamIcon = v end,
 })
-
 NameSection:Colorpicker({
     Name = "Name Color",
     Flag = "VisualsNameColor",
     Value = {0, 0, 1, 0, false},
     Callback = function(tbl, color) Settings.Visuals.NameColor = "#" .. color:ToHex() end,
 })
-
 NameSection:Toggle({
     Name = "Distance",
     Flag = "VisualsDistance",
     Value = true,
     Callback = function(v) Settings.Visuals.Distance = v end,
 })
-
 NameSection:Toggle({
     Name = "Distance Color by Distance",
     Flag = "DistanceColorByDistance",
     Value = true,
     Callback = function(v) Settings.Visuals.DistanceColorByDistance = v end,
 })
-
 NameSection:Colorpicker({
     Name = "Distance Color",
     Flag = "VisualsDistanceColor",
     Value = {0, 0, 1, 0, false},
     Callback = function(tbl, color) Settings.Visuals.DistanceColor = "#" .. color:ToHex() end,
 })
-
 NameSection:Dropdown({
     Name = "Distance Unit",
     Flag = "DistanceUnit",
@@ -683,16 +784,13 @@ NameSection:Dropdown({
     end,
 })
 
-
 local WeaponSection = VisualsTab:Section({ Name = "Weapon", Side = "Left" })
-
 WeaponSection:Toggle({
     Name = "Show Weapon",
     Flag = "VisualsWeapon",
     Value = false,
     Callback = function(v) Settings.Visuals.Weapon = v end,
 })
-
 WeaponSection:Colorpicker({
     Name = "Weapon Color",
     Flag = "VisualsWeaponColor",
@@ -700,23 +798,19 @@ WeaponSection:Colorpicker({
     Callback = function(tbl, color) Settings.Visuals.WeaponColor = "#" .. color:ToHex() end,
 })
 
-
 local SkeletonSection = VisualsTab:Section({ Name = "Skeleton", Side = "Left" })
-
 SkeletonSection:Toggle({
     Name = "Skeleton",
     Flag = "VisualsSkeleton",
     Value = false,
     Callback = function(v) Settings.Visuals.Skeleton = v end,
 })
-
 SkeletonSection:Colorpicker({
     Name = "Skeleton Color",
     Flag = "VisualsSkeletonColor",
     Value = {0, 1, 1, 0, false},
     Callback = function(tbl, color) Settings.Visuals.SkeletonColor = "#" .. color:ToHex() end,
 })
-
 SkeletonSection:Slider({
     Name = "Skeleton Thickness",
     Flag = "SkeletonThickness",
@@ -727,23 +821,19 @@ SkeletonSection:Slider({
     Callback = function(v) Settings.Visuals.SkeletonThickness = v end,
 })
 
--- Corner Box
 local CornerSection = VisualsTab:Section({ Name = "Corner Box", Side = "Left" })
-
 CornerSection:Toggle({
     Name = "Corner Box",
     Flag = "VisualsCornerBox",
     Value = false,
     Callback = function(v) Settings.Visuals.CornerBox = v end,
 })
-
 CornerSection:Colorpicker({
     Name = "Corner Box Color",
     Flag = "VisualsCornerBoxColor",
     Value = {0, 1, 1, 0, false},
     Callback = function(tbl, color) Settings.Visuals.CornerBoxColor = "#" .. color:ToHex() end,
 })
-
 CornerSection:Slider({
     Name = "Corner Thickness",
     Flag = "VisualsCornerThickness",
@@ -753,7 +843,6 @@ CornerSection:Slider({
     Precise = 0,
     Callback = function(v) Settings.Visuals.CornerBoxThickness = v end,
 })
-
 CornerSection:Slider({
     Name = "Corner Length Factor",
     Flag = "VisualsCornerLengthFactor",
@@ -764,23 +853,19 @@ CornerSection:Slider({
     Callback = function(v) Settings.Visuals.CornerBoxLengthFactor = v end,
 })
 
--- Head Dot
 local HeadDotSection = VisualsTab:Section({ Name = "Head Dot", Side = "Right" })
-
 HeadDotSection:Toggle({
     Name = "Head Dot",
     Flag = "VisualsHeadDot",
     Value = false,
     Callback = function(v) Settings.Visuals.HeadDot = v end,
 })
-
 HeadDotSection:Colorpicker({
     Name = "Head Dot Color",
     Flag = "VisualsHeadDotColor",
     Value = {0, 1, 1, 0, false},
     Callback = function(tbl, color) Settings.Visuals.HeadDotColor = "#" .. color:ToHex() end,
 })
-
 HeadDotSection:Slider({
     Name = "Head Dot Radius",
     Flag = "VisualsHeadDotRadius",
@@ -790,7 +875,6 @@ HeadDotSection:Slider({
     Precise = 0,
     Callback = function(v) Settings.Visuals.HeadDotRadius = v end,
 })
-
 HeadDotSection:Toggle({
     Name = "Head Dot Filled",
     Flag = "VisualsHeadDotFilled",
@@ -798,16 +882,13 @@ HeadDotSection:Toggle({
     Callback = function(v) Settings.Visuals.HeadDotFilled = v end,
 })
 
--- Radar
 local RadarSection = VisualsTab:Section({ Name = "Radar", Side = "Right" })
-
 RadarSection:Toggle({
     Name = "Enable Radar",
     Flag = "VisualsRadar",
     Value = false,
     Callback = function(v) Settings.Visuals.Radar = v end,
 })
-
 RadarSection:Slider({
     Name = "Radar Size",
     Flag = "RadarSize",
@@ -817,7 +898,6 @@ RadarSection:Slider({
     Precise = 0,
     Callback = function(v) Settings.Visuals.RadarSize = v end,
 })
-
 RadarSection:Colorpicker({
     Name = "Radar Dot Color",
     Flag = "RadarColor",
@@ -825,16 +905,13 @@ RadarSection:Colorpicker({
     Callback = function(tbl, color) Settings.Visuals.RadarColor = "#" .. color:ToHex() end,
 })
 
--- Chams
 local ChamsSection = VisualsTab:Section({ Name = "Chams", Side = "Right" })
-
 ChamsSection:Toggle({
     Name = "Enable Chams",
     Flag = "VisualsChams",
     Value = false,
     Callback = function(v) Settings.Visuals.Chams = v end,
 })
-
 ChamsSection:Colorpicker({
     Name = "Chams Color",
     Flag = "ChamsColor",
@@ -842,16 +919,13 @@ ChamsSection:Colorpicker({
     Callback = function(tbl, color) Settings.Visuals.ChamsColor = "#" .. color:ToHex() end,
 })
 
--- View Angle
 local ViewAngleSection = VisualsTab:Section({ Name = "View Angle", Side = "Right" })
-
 ViewAngleSection:Toggle({
     Name = "Show View Angle",
     Flag = "VisualsViewAngle",
     Value = false,
     Callback = function(v) Settings.Visuals.ViewAngle = v end,
 })
-
 ViewAngleSection:Colorpicker({
     Name = "View Angle Color",
     Flag = "ViewAngleColor",
@@ -859,23 +933,19 @@ ViewAngleSection:Colorpicker({
     Callback = function(tbl, color) Settings.Visuals.ViewAngleColor = "#" .. color:ToHex() end,
 })
 
--- Snap Lines (new)
 local SnapLinesSection = VisualsTab:Section({ Name = "Snap Lines", Side = "Left" })
-
 SnapLinesSection:Toggle({
     Name = "Enable Snap Lines",
     Flag = "SnapLines",
     Value = false,
     Callback = function(v) Settings.Visuals.SnapLines = v end,
 })
-
 SnapLinesSection:Colorpicker({
     Name = "Snap Lines Color",
     Flag = "SnapLinesColor",
     Value = {0.166, 1, 1, 0, false},
     Callback = function(tbl, color) Settings.Visuals.SnapLinesColor = "#" .. color:ToHex() end,
 })
-
 SnapLinesSection:Slider({
     Name = "Snap Lines Thickness",
     Flag = "SnapLinesThickness",
@@ -886,9 +956,7 @@ SnapLinesSection:Slider({
     Callback = function(v) Settings.Visuals.SnapLinesThickness = v end,
 })
 
--- Rainbow
 local RainbowSection = VisualsTab:Section({ Name = "Rainbow", Side = "Left" })
-
 RainbowSection:Toggle({
     Name = "Rainbow ESP",
     Flag = "VisualsRainbow",
@@ -896,16 +964,13 @@ RainbowSection:Toggle({
     Callback = function(v) Settings.Visuals.Rainbow = v end,
 })
 
--- Player Colors
 local PlayerColorsSection = VisualsTab:Section({ Name = "Player Colors", Side = "Left" })
-
 PlayerColorsSection:Colorpicker({
     Name = "Enemy Color",
     Flag = "EnemyColor",
     Value = {0, 1, 1, 0, false},
     Callback = function(tbl, color) Settings.Visuals.EnemyColor = "#" .. color:ToHex() end,
 })
-
 PlayerColorsSection:Colorpicker({
     Name = "Team Color",
     Flag = "TeamColor",
@@ -913,7 +978,32 @@ PlayerColorsSection:Colorpicker({
     Callback = function(tbl, color) Settings.Visuals.TeamColor = "#" .. color:ToHex() end,
 })
 
---------------------- MISC TAB ---------------------
+local DamageSection = VisualsTab:Section({ Name = "Damage Indicators", Side = "Left" })
+DamageSection:Toggle({
+    Name = "Enable Damage Indicators",
+    Flag = "DamageIndicators",
+    Value = false,
+    Callback = function(v) Settings.Visuals.DamageIndicators = v end,
+})
+DamageSection:Toggle({
+    Name = "Hitmarkers",
+    Flag = "Hitmarkers",
+    Value = false,
+    Callback = function(v) Settings.Visuals.Hitmarkers = v end,
+})
+DamageSection:Toggle({
+    Name = "Hit Effect (flash on target)",
+    Flag = "HitEffect",
+    Value = false,
+    Callback = function(v) Settings.Visuals.HitEffect = v end,
+})
+DamageSection:Colorpicker({
+    Name = "Hit Effect Color",
+    Flag = "HitEffectColor",
+    Value = {0, 0, 0, 0, false},
+    Callback = function(tbl, color) Settings.Visuals.HitEffectColor = "#" .. color:ToHex() end,
+})
+
 local MiscSection = MiscTab:Section({ Name = "Movement", Side = "Left" })
 
 MiscSection:Toggle({
@@ -922,7 +1012,6 @@ MiscSection:Toggle({
     Value = false,
     Callback = function(v) Settings.Misc.Walkspeed.Enabled = v end,
 })
-
 MiscSection:Slider({
     Name = "Walkspeed Value",
     Flag = "Walkspeed",
@@ -939,7 +1028,6 @@ MiscSection:Toggle({
     Value = false,
     Callback = function(v) Settings.Misc.JumpPower.Enabled = v end,
 })
-
 MiscSection:Slider({
     Name = "Jump Power Value",
     Flag = "JumpPower",
@@ -956,7 +1044,6 @@ MiscSection:Toggle({
     Value = false,
     Callback = function(v) Settings.Misc.CFrameSpeed.Enabled = v end,
 })
-
 MiscSection:Slider({
     Name = "CFrame Speed Value",
     Flag = "CFrameSpeed",
@@ -974,7 +1061,56 @@ MiscSection:Toggle({
     Callback = function(v) Settings.Misc.Sit = v end,
 })
 
--- Server utilities
+MiscSection:Toggle({
+    Name = "Third Person Unlocker",
+    Flag = "ThirdPerson",
+    Value = false,
+    Callback = function(v)
+        Settings.Misc.ThirdPerson = v
+        if v then
+            LocalPlayer.CameraMode = Enum.CameraMode.Classic
+        else
+            LocalPlayer.CameraMode = Enum.CameraMode.LockFirstPerson
+        end
+    end,
+})
+
+MiscSection:Toggle({
+    Name = "BHop (Auto Bunny Hop)",
+    Flag = "BHop",
+    Value = false,
+    Callback = function(v) Settings.Misc.BHop = v end,
+})
+
+MiscSection:Toggle({
+    Name = "NoClip",
+    Flag = "NoClip",
+    Value = false,
+    Callback = function(v) Settings.Misc.NoClip = v end,
+})
+
+MiscSection:Toggle({
+    Name = "Freecam",
+    Flag = "Freecam",
+    Value = false,
+    Callback = function(v)
+        Settings.Misc.Freecam = v
+        if not v then
+            Camera.CameraSubject = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") or LocalPlayer
+        end
+    end,
+})
+
+MiscSection:Slider({
+    Name = "Field of View",
+    Flag = "FOV",
+    Min = 20,
+    Max = 120,
+    Value = 70,
+    Precise = 0,
+    Callback = function(v) Settings.Misc.FOV = v end,
+})
+
 local ServerSection = MiscTab:Section({ Name = "Server", Side = "Right" })
 
 ServerSection:Button({
@@ -1038,12 +1174,19 @@ ServerSection:Button({
     end,
 })
 
--- Server Info (fixed)
 local ServerInfoSection = MiscTab:Section({ Name = "Server Info", Side = "Right" })
 
 local serverRegionLabel = ServerInfoSection:Label({ Name = "Region: Unknown" })
 local playerCountLabel = ServerInfoSection:Label({ Name = "Players: 0/0" })
 local uptimeLabel = ServerInfoSection:Label({ Name = "Uptime: 0s" })
+
+local function updateLabel(label, text)
+    if label and label.Instance then
+        label.Instance.Text = text
+    elseif label and label.Text then
+        label.Text = text
+    end
+end
 
 task.spawn(function()
     while true do
@@ -1064,18 +1207,15 @@ task.spawn(function()
             else
                 region = "Other"
             end
-            serverRegionLabel:Set("Region: " .. region)
-
+            updateLabel(serverRegionLabel, "Region: " .. region)
             local playerCount = #Players:GetPlayers()
             local maxPlayers = Players.MaxPlayers or 50
-            playerCountLabel:Set("Players: " .. playerCount .. "/" .. maxPlayers)
-
+            updateLabel(playerCountLabel, "Players: " .. playerCount .. "/" .. maxPlayers)
             local uptime = workspace.DistributedGameTime
-            uptimeLabel:Set("Uptime: " .. math.floor(uptime) .. "s")
+            updateLabel(uptimeLabel, "Uptime: " .. math.floor(uptime) .. "s")
         end)
     end
 end)
-
 
 local UISection = MiscTab:Section({ Name = "UI Settings", Side = "Right" })
 
@@ -1106,18 +1246,19 @@ UISection:Button({
             if FOVCircle and FOVCircle.Remove then FOVCircle:Remove() end
             if TargetLine and TargetLine.Remove then TargetLine:Remove() end
             if RadarCircle and RadarCircle.Remove then RadarCircle:Remove() end
-            if RadarDot and RadarDot.Remove then RadarDot:Remove() end
-
             for player, ui in pairs(ESPCache) do
                 if ui then
                     if ui.Box and ui.Box.Remove then ui.Box:Remove() end
                     if ui.Tracer and ui.Tracer.Remove then ui.Tracer:Remove() end
                     if ui.Health and ui.Health.Remove then ui.Health:Remove() end
+                    if ui.HealthBackground and ui.HealthBackground.Remove then ui.HealthBackground:Remove() end
                     if ui.Name and ui.Name.Remove then ui.Name:Remove() end
                     if ui.HeadDot and ui.HeadDot.Remove then ui.HeadDot:Remove() end
                     if ui.Weapon and ui.Weapon.Remove then ui.Weapon:Remove() end
                     if ui.HealthText and ui.HealthText.Remove then ui.HealthText:Remove() end
                     if ui.ViewAngle and ui.ViewAngle.Remove then ui.ViewAngle:Remove() end
+                    if ui.SnapLine and ui.SnapLine.Remove then ui.SnapLine:Remove() end
+                    if ui.RadarDot and ui.RadarDot.Remove then ui.RadarDot:Remove() end
                     if ui.Chams and ui.Chams.Remove then ui.Chams:Remove() end
                     if ui.Skeleton then
                         for _, line in pairs(ui.Skeleton) do if line and line.Remove then line:Remove() end end
@@ -1130,18 +1271,15 @@ UISection:Button({
                     end
                 end
             end
-
             if Settings.Animation.CurrentTrack and Settings.Animation.CurrentTrack.Stop then
                 Settings.Animation.CurrentTrack:Stop()
             end
             if Window and Window.Instance then Window.Instance:Destroy() end
             if Bracket and Bracket.Screen then Bracket.Screen:Destroy() end
-            print("rawr.xyz unloaded.")
         end)
     end,
 })
 
--- Animation Player
 local AnimSection = MiscTab:Section({ Name = "Animation Player", Side = "Left" })
 
 AnimSection:Textbox({
@@ -1166,26 +1304,21 @@ AnimSection:Button({
         if not character then return end
         local humanoid = character:FindFirstChildOfClass("Humanoid")
         if not humanoid then return end
-
         local animId = Settings.Animation.AnimationId
         if animId == "" then return end
         if not string.find(animId, "rbxassetid://") then
             animId = "rbxassetid://" .. animId
         end
-
         if Settings.Animation.CurrentTrack and Settings.Animation.CurrentTrack.PlaybackState ~= Enum.PlaybackState.Stopped then
             Settings.Animation.CurrentTrack:Stop()
         end
-
         local animator = humanoid.Animator
         if not animator then return end
-
         local success, track = pcall(function()
             local animation = Instance.new("Animation")
             animation.AnimationId = animId
             return animator:LoadAnimation(animation)
         end)
-
         if success and track then
             track:Play()
             Settings.Animation.CurrentTrack = track
@@ -1208,7 +1341,6 @@ if LocalPlayer then
         Settings.Animation.CurrentTrack = nil
     end)
 end
-
 
 local PlayerSection = PlayersTab:Section({ Name = "Player Actions", Side = "Left" })
 
@@ -1305,7 +1437,6 @@ PlayerSection:Button({
                 syn.request({Url = url, Method = "GET"})
             else
                 setclipboard(url)
-                print("Profile URL copied to clipboard.")
             end
         end
     end,
@@ -1343,7 +1474,6 @@ if LocalPlayer.Character then
     end)
 end
 
-
 local FOVCircle = Drawing.new("Circle")
 if isDrawing(FOVCircle) then
     FOVCircle.Visible = false
@@ -1359,9 +1489,7 @@ if isDrawing(TargetLine) then
     TargetLine.Color = Color3.new(1,1,0)
 end
 
--- Radar drawings
 local RadarCircle = Drawing.new("Circle")
-local RadarDot = Drawing.new("Circle")
 if isDrawing(RadarCircle) then
     RadarCircle.Thickness = 1
     RadarCircle.NumSides = 60
@@ -1369,14 +1497,6 @@ if isDrawing(RadarCircle) then
     RadarCircle.Color = Color3.new(1,1,1)
     RadarCircle.Visible = false
 end
-if isDrawing(RadarDot) then
-    RadarDot.Radius = 3
-    RadarDot.NumSides = 20
-    RadarDot.Filled = true
-    RadarDot.Color = Color3.new(1,1,1)
-    RadarDot.Visible = false
-end
-
 
 local function IsEnemy(player)
     if player == LocalPlayer then return false end
@@ -1423,40 +1543,37 @@ local function GetPredictedPosition(part)
     return part.Position + part.Velocity * pred
 end
 
-local function GetClosestTarget()
+local function GetClosestTarget(ignoreCurrent)
     local closest = nil
     local closestDist = (Settings.Aimbot.Mode == "Crosshair") and Settings.Aimbot.FOV or math.huge
     local screenCenter = Camera.ViewportSize / 2
-
     for _, player in pairs(Players:GetPlayers()) do
         if not IsEnemy(player) then continue end
+        if ignoreCurrent and player == Settings.Aimbot.StickyTarget then continue end
         if not player.Character then continue end
         local targetPart = GetTargetPart(player.Character)
         if not targetPart then continue end
-
         if Settings.Aimbot.VisibleCheck and not IsVisible(targetPart) then
             continue
         end
-
         local targetPos = GetPredictedPosition(targetPart)
         if not targetPos then continue end
         local screenPos, onScreen = Camera:WorldToViewportPoint(targetPos)
         if not onScreen or screenPos.Z <= 0 then continue end
-
         if Settings.Aimbot.Mode == "Crosshair" then
             local dist = (Vector2.new(screenPos.X, screenPos.Y) - screenCenter).Magnitude
             if dist > Settings.Aimbot.FOV then continue end
             if dist < closestDist then
                 closestDist = dist
-                closest = targetPart
+                closest = player
             end
-        else -- Distance mode
+        else
             local myPos = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
             if myPos then
                 local dist = (targetPart.Position - myPos.Position).Magnitude
                 if dist < closestDist then
                     closestDist = dist
-                    closest = targetPart
+                    closest = player
                 end
             end
         end
@@ -1494,12 +1611,56 @@ local function updateTriggerKeyState()
     end
 end
 
+local orbitKeyPressed = false
+local function updateOrbitKeyState()
+    local key = Settings.Aimbot.Orbit.KeyEnum
+    if not key then return end
+    if typeof(key) == "EnumItem" then
+        if key.Name:find("Button") then
+            orbitKeyPressed = UserInputService:IsMouseButtonPressed(key)
+        else
+            orbitKeyPressed = UserInputService:IsKeyDown(key)
+        end
+    else
+        orbitKeyPressed = false
+    end
+end
+
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+    if Settings.Aimbot.StickyAim and input.KeyCode == Settings.Aimbot.StickyKeyEnum then
+        if Settings.Aimbot.StickyTarget then
+            Settings.Aimbot.StickyTarget = nil
+            notify("Sticky aim unlocked", 1)
+        else
+            local target = GetClosestTarget(false)
+            if target then
+                Settings.Aimbot.StickyTarget = target
+                notify("Sticky aim locked on " .. target.Name, 2)
+            else
+                notify("No target found", 1)
+            end
+        end
+    end
+end)
+
 local lastTriggerTime = 0
 local function doTrigger()
     if not Settings.Triggerbot.Enabled then return end
     if Settings.Triggerbot.OnKey and not triggerKeyPressed then return end
-
-    local targetPart = GetClosestTarget()
+    local targetPart = nil
+    local targetPlayer = nil
+    if Settings.Aimbot.StickyAim and Settings.Aimbot.StickyTarget then
+        targetPlayer = Settings.Aimbot.StickyTarget
+        if targetPlayer and targetPlayer.Character then
+            targetPart = GetTargetPart(targetPlayer.Character)
+        end
+    else
+        targetPlayer = GetClosestTarget(false)
+        if targetPlayer then
+            targetPart = GetTargetPart(targetPlayer.Character)
+        end
+    end
     if targetPart then
         local targetPos = GetPredictedPosition(targetPart)
         if not targetPos then return end
@@ -1523,7 +1684,6 @@ local function doTrigger()
         end
     end
 end
-
 
 local function updateMovement()
     if LocalPlayer.Character then
@@ -1565,6 +1725,143 @@ local function updateSit()
     end
 end
 
+local bhopLastJump = 0
+local function updateBHop()
+    if not Settings.Misc.BHop then return end
+    if not LocalPlayer.Character then return end
+    local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+    if hum.FloorMaterial == Enum.Material.Air then return end
+    if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+        local now = tick()
+        if now - bhopLastJump > 0.2 then
+            hum.Jump = true
+            bhopLastJump = now
+        end
+    end
+end
+
+local noclipConnection
+local function updateNoClip()
+    if Settings.Misc.NoClip then
+        if not noclipConnection then
+            noclipConnection = RunService.Stepped:Connect(function()
+                if not LocalPlayer.Character then return end
+                for _, v in pairs(LocalPlayer.Character:GetDescendants()) do
+                    if v:IsA("BasePart") and v.CanCollide then
+                        v.CanCollide = false
+                    end
+                end
+            end)
+        end
+    else
+        if noclipConnection then
+            noclipConnection:Disconnect()
+            noclipConnection = nil
+            if LocalPlayer.Character then
+                for _, v in pairs(LocalPlayer.Character:GetDescendants()) do
+                    if v:IsA("BasePart") then
+                        v.CanCollide = true
+                    end
+                end
+            end
+        end
+    end
+end
+
+local freecamObject = nil
+local freecamConnection = nil
+local function updateFreecam()
+    if Settings.Misc.Freecam then
+        if not freecamObject then
+            freecamObject = Instance.new("Part")
+            freecamObject.Name = "FreecamPart"
+            freecamObject.Anchored = true
+            freecamObject.CanCollide = false
+            freecamObject.Transparency = 1
+            freecamObject.Size = Vector3.new(1,1,1)
+            freecamObject.Parent = workspace
+            Camera.CameraSubject = freecamObject
+            freecamConnection = RunService.RenderStepped:Connect(function()
+                local move = Vector3.new()
+                if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+                    move = move + Camera.CFrame.LookVector
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+                    move = move - Camera.CFrame.LookVector
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+                    move = move - Camera.CFrame.RightVector
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+                    move = move + Camera.CFrame.RightVector
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.E) then
+                    move = move + Vector3.new(0,1,0)
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.Q) then
+                    move = move - Vector3.new(0,1,0)
+                end
+                freecamObject.CFrame = freecamObject.CFrame + move * 0.5
+                Camera.CFrame = CFrame.new(freecamObject.Position, freecamObject.Position + Camera.CFrame.LookVector * 10)
+            end)
+        end
+    else
+        if freecamConnection then
+            freecamConnection:Disconnect()
+            freecamConnection = nil
+        end
+        if freecamObject then
+            freecamObject:Destroy()
+            freecamObject = nil
+        end
+        Camera.CameraSubject = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") or LocalPlayer
+    end
+end
+
+local orbitAngle = 0
+local function updateOrbit()
+    if not Settings.Aimbot.Orbit.Enabled then return end
+    if not Settings.Aimbot.StickyTarget then return end
+    local target = Settings.Aimbot.StickyTarget
+    if not target or not target.Character then return end
+    local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return end
+    if orbitKeyPressed then
+        if not Settings.Aimbot.Orbit.OriginalCFrame then
+            Settings.Aimbot.Orbit.OriginalCFrame = myRoot.CFrame
+        end
+        local targetPos
+        local orbitPos = Settings.Aimbot.Orbit.Position
+        if orbitPos == "Head" then
+            local head = target.Character:FindFirstChild("Head")
+            targetPos = head and head.Position or target.Character.HumanoidRootPart.Position
+        elseif orbitPos == "Chest" then
+            local chest = target.Character:FindFirstChild("UpperTorso") or target.Character:FindFirstChild("Torso")
+            targetPos = chest and chest.Position or target.Character.HumanoidRootPart.Position
+        elseif orbitPos == "Legs" then
+            local leg = target.Character:FindFirstChild("LeftFoot") or target.Character:FindFirstChild("RightFoot") or target.Character:FindFirstChild("LowerTorso")
+            targetPos = leg and leg.Position or target.Character.HumanoidRootPart.Position
+        else
+            targetPos = target.Character.HumanoidRootPart.Position
+        end
+        local radius = 5
+        local speed = Settings.Aimbot.Orbit.Speed
+        orbitAngle = orbitAngle + math.rad(speed)
+        local offset = Vector3.new(math.cos(orbitAngle) * radius, 0, math.sin(orbitAngle) * radius)
+        local newPos = targetPos + offset
+        myRoot.CFrame = CFrame.new(newPos) * CFrame.Angles(0, orbitAngle + math.pi/2, 0)
+        local camPos = Camera.CFrame.Position
+        local targetCF = CFrame.lookAt(camPos, targetPos)
+        Camera.CFrame = targetCF
+    else
+        if Settings.Aimbot.Orbit.OriginalCFrame then
+            myRoot.CFrame = Settings.Aimbot.Orbit.OriginalCFrame
+            Settings.Aimbot.Orbit.OriginalCFrame = nil
+            orbitAngle = 0
+        end
+    end
+end
 
 UserInputService.InputBegan:Connect(function(input, gpe)
     if gpe then return end
@@ -1573,9 +1870,7 @@ UserInputService.InputBegan:Connect(function(input, gpe)
     end
 end)
 
-
 RunService.RenderStepped:Connect(function()
-    -- FOV Circle
     if Settings.Aimbot.ShowFOV and Settings.Aimbot.Enabled and isDrawing(FOVCircle) then
         FOVCircle.Visible = true
         FOVCircle.Radius = Settings.Aimbot.FOV
@@ -1585,16 +1880,29 @@ RunService.RenderStepped:Connect(function()
     else
         setVisible(FOVCircle, false)
     end
-
     updateKeyState()
     updateTriggerKeyState()
-
+    updateOrbitKeyState()
+    if Settings.Aimbot.StickyAim and Settings.Aimbot.StickyTarget then
+        local target = Settings.Aimbot.StickyTarget
+        if not target or not target.Parent or not target.Character or not target.Character:FindFirstChildOfClass("Humanoid") or target.Character.Humanoid.Health <= 0 or not IsEnemy(target) then
+            Settings.Aimbot.StickyTarget = nil
+        end
+    end
     local targetPart = nil
     if Settings.Aimbot.Enabled and aimbotKeyPressed then
-        targetPart = GetClosestTarget()
+        if Settings.Aimbot.StickyAim and Settings.Aimbot.StickyTarget then
+            local target = Settings.Aimbot.StickyTarget
+            if target and target.Character then
+                targetPart = GetTargetPart(target.Character)
+            end
+        else
+            local targetPlayer = GetClosestTarget(false)
+            if targetPlayer then
+                targetPart = GetTargetPart(targetPlayer.Character)
+            end
+        end
     end
-
-    
     if Settings.Aimbot.ShowTargetLine and targetPart and isDrawing(TargetLine) then
         local targetPos = GetPredictedPosition(targetPart)
         if targetPos then
@@ -1612,44 +1920,51 @@ RunService.RenderStepped:Connect(function()
     else
         setVisible(TargetLine, false)
     end
-
-    -- Silent aim not workin
-    if targetPart and Settings.Aimbot.SilentAim then
-        -- No camera movement
-    elseif targetPart and not Settings.Aimbot.SilentAim then
-        local targetPos = GetPredictedPosition(targetPart)
-        if targetPos then
-            local camPos = Camera.CFrame.Position
-            local targetCF = CFrame.lookAt(camPos, targetPos)
-            Camera.CFrame = Camera.CFrame:Lerp(targetCF, Settings.Aimbot.Smoothness)
+    if not spectating then
+        if not orbitKeyPressed or not Settings.Aimbot.Orbit.Enabled then
+            if targetPart and not Settings.Aimbot.SilentAim then
+                local targetPos = GetPredictedPosition(targetPart)
+                if targetPos then
+                    local camPos = Camera.CFrame.Position
+                    local targetCF = CFrame.lookAt(camPos, targetPos)
+                    local smooth = Settings.Aimbot.HardLock and 1 or Settings.Aimbot.Smoothness
+                    Camera.CFrame = Camera.CFrame:Lerp(targetCF, smooth)
+                end
+            end
         end
     end
-
     doTrigger()
     updateMovement()
     updateCFrameSpeed()
     updateSit()
+    updateBHop()
+    updateNoClip()
+    updateFreecam()
+    updateOrbit()
+    Camera.FieldOfView = Settings.Misc.FOV
 end)
 
---------------------- ESP SYSTEM (FULL) ---------------------
 local ESPCache = {}
+local DamageIndicators = {}
+local Hitmarkers = {}
+local HitEffects = {}
 
 local function hideESP(ui)
     if not ui or type(ui) ~= "table" then return end
     setVisible(ui.Box, false)
     setVisible(ui.Tracer, false)
     setVisible(ui.Health, false)
+    setVisible(ui.HealthBackground, false)
     setVisible(ui.Name, false)
     setVisible(ui.HeadDot, false)
     setVisible(ui.Weapon, false)
     setVisible(ui.HealthText, false)
     setVisible(ui.ViewAngle, false)
-    if ui.HealthBackground then setVisible(ui.HealthBackground, false) end
-
+    setVisible(ui.SnapLine, false)
+    setVisible(ui.RadarDot, false)
     if ui.Chams and ui.Chams.Remove then
         pcall(ui.Chams.Remove, ui.Chams)
     end
-
     if ui.Skeleton then
         for _, line in pairs(ui.Skeleton) do setVisible(line, false) end
     end
@@ -1667,7 +1982,6 @@ local function cleanESP(player)
     if not ESPCache[player] then return end
     local ui = ESPCache[player]
     if type(ui) ~= "table" then ESPCache[player] = nil; return end
-
     if ui.Box and ui.Box.Remove then pcall(ui.Box.Remove, ui.Box) end
     if ui.Tracer and ui.Tracer.Remove then pcall(ui.Tracer.Remove, ui.Tracer) end
     if ui.Health and ui.Health.Remove then pcall(ui.Health.Remove, ui.Health) end
@@ -1677,6 +1991,8 @@ local function cleanESP(player)
     if ui.Weapon and ui.Weapon.Remove then pcall(ui.Weapon.Remove, ui.Weapon) end
     if ui.HealthText and ui.HealthText.Remove then pcall(ui.HealthText.Remove, ui.HealthText) end
     if ui.ViewAngle and ui.ViewAngle.Remove then pcall(ui.ViewAngle.Remove, ui.ViewAngle) end
+    if ui.SnapLine and ui.SnapLine.Remove then pcall(ui.SnapLine.Remove, ui.SnapLine) end
+    if ui.RadarDot and ui.RadarDot.Remove then pcall(ui.RadarDot.Remove, ui.RadarDot) end
     if ui.Chams and ui.Chams.Remove then pcall(ui.Chams.Remove, ui.Chams) end
     if ui.Skeleton then
         for _, line in pairs(ui.Skeleton) do if line and line.Remove then pcall(line.Remove, line) end end
@@ -1693,13 +2009,11 @@ end
 local function createESP(player)
     if player == LocalPlayer then return end
     if ESPCache[player] then return end
-
     task.spawn(function()
         local function safeDrawing(type)
             local success, obj = pcall(Drawing.new, type)
             return success and obj or nil
         end
-
         local box = safeDrawing("Square")
         local tracer = safeDrawing("Line")
         local health = safeDrawing("Line")
@@ -1709,7 +2023,8 @@ local function createESP(player)
         local weapon = safeDrawing("Text")
         local healthText = safeDrawing("Text")
         local viewAngle = safeDrawing("Line")
-
+        local snapLine = safeDrawing("Line")
+        local radarDot = safeDrawing("Circle")
         if box then box.Thickness = Settings.Visuals.BoxThickness; box.Filled = false; box.Visible = false end
         if tracer then tracer.Thickness = Settings.Visuals.TracerThickness; tracer.Visible = false end
         if health then health.Thickness = 3; health.Visible = false end
@@ -1719,7 +2034,8 @@ local function createESP(player)
         if weapon then weapon.Size = 12; weapon.Center = true; weapon.Outline = true; weapon.Font = 2; weapon.Visible = false end
         if healthText then healthText.Size = 12; healthText.Center = true; healthText.Outline = true; healthText.Font = 2; healthText.Visible = false end
         if viewAngle then viewAngle.Thickness = 1; viewAngle.Visible = false end
-
+        if snapLine then snapLine.Thickness = Settings.Visuals.SnapLinesThickness; snapLine.Visible = false end
+        if radarDot then radarDot.Radius = 3; radarDot.NumSides = 20; radarDot.Filled = true; radarDot.Visible = false end
         local chams
         pcall(function()
             chams = Instance.new("Highlight")
@@ -1729,7 +2045,6 @@ local function createESP(player)
             chams.Parent = player.Character
             chams.Enabled = false
         end)
-
         ESPCache[player] = {
             Box = box,
             Tracer = tracer,
@@ -1740,6 +2055,8 @@ local function createESP(player)
             Weapon = weapon,
             HealthText = healthText,
             ViewAngle = viewAngle,
+            SnapLine = snapLine,
+            RadarDot = radarDot,
             Chams = chams,
             Skeleton = {},
             Box3D = {},
@@ -1747,7 +2064,6 @@ local function createESP(player)
             LastPosition = nil,
             StuckTime = 0,
         }
-
         if player and player.CharacterRemoving then
             player.CharacterRemoving:Connect(function()
                 if ESPCache[player] then hideESP(ESPCache[player]) end
@@ -1762,13 +2078,11 @@ for _, p in ipairs(Players:GetPlayers()) do
         task.wait()
     end)
 end
-
 Players.PlayerAdded:Connect(function(p)
     task.spawn(function()
         createESP(p)
     end)
 end)
-
 Players.PlayerRemoving:Connect(cleanESP)
 
 local function findCharacter(player)
@@ -1808,10 +2122,8 @@ local function draw3DBox(player, ui, character, color)
         end
     end
     for _, line in pairs(ui.Box3D) do if line then line.Color = color end end
-
     local root = character:FindFirstChild("HumanoidRootPart")
     if not root then for _, line in pairs(ui.Box3D) do setVisible(line, false) end; return end
-
     local size = root.Size * 1.5
     local cf = root.CFrame
     local corners = {
@@ -1824,7 +2136,6 @@ local function draw3DBox(player, ui, character, color)
         cf * CFrame.new(-size.X/2, -size.Y/2, -size.Z/2),
         cf * CFrame.new( size.X/2, -size.Y/2, -size.Z/2),
     }
-
     local screenCorners = {}
     local allOnScreen = true
     for i, corner in ipairs(corners) do
@@ -1832,12 +2143,10 @@ local function draw3DBox(player, ui, character, color)
         if not vis then allOnScreen = false; break end
         screenCorners[i] = Vector2.new(pos.X, pos.Y)
     end
-
     if not allOnScreen then
         for _, line in pairs(ui.Box3D) do setVisible(line, false) end
         return
     end
-
     local edges = {
         {1,2}, {2,3}, {3,4}, {4,1},
         {5,6}, {6,7}, {7,8}, {8,5},
@@ -1858,15 +2167,34 @@ local function drawSkeleton(player, ui, character, color)
         if ui.Skeleton then for _, line in pairs(ui.Skeleton) do setVisible(line, false) end end
         return
     end
-
-    local limbPairs = {
-        {"Head", "UpperTorso"}, {"UpperTorso", "LowerTorso"},
-        {"UpperTorso", "LeftUpperArm"}, {"LeftUpperArm", "LeftLowerArm"}, {"LeftLowerArm", "LeftHand"},
-        {"UpperTorso", "RightUpperArm"}, {"RightUpperArm", "RightLowerArm"}, {"RightLowerArm", "RightHand"},
-        {"LowerTorso", "LeftUpperLeg"}, {"LeftUpperLeg", "LeftLowerLeg"}, {"LeftLowerLeg", "LeftFoot"},
-        {"LowerTorso", "RightUpperLeg"}, {"RightUpperLeg", "RightLowerLeg"}, {"RightLowerLeg", "RightFoot"},
-    }
-
+    local isR15 = character:FindFirstChild("UpperTorso") ~= nil
+    local limbPairs
+    if isR15 then
+        limbPairs = {
+            {"Head", "UpperTorso"},
+            {"UpperTorso", "LowerTorso"},
+            {"UpperTorso", "LeftUpperArm"},
+            {"LeftUpperArm", "LeftLowerArm"},
+            {"LeftLowerArm", "LeftHand"},
+            {"UpperTorso", "RightUpperArm"},
+            {"RightUpperArm", "RightLowerArm"},
+            {"RightLowerArm", "RightHand"},
+            {"LowerTorso", "LeftUpperLeg"},
+            {"LeftUpperLeg", "LeftLowerLeg"},
+            {"LeftLowerLeg", "LeftFoot"},
+            {"LowerTorso", "RightUpperLeg"},
+            {"RightUpperLeg", "RightLowerLeg"},
+            {"RightLowerLeg", "RightFoot"},
+        }
+    else
+        limbPairs = {
+            {"Head", "Torso"},
+            {"Torso", "Left Arm"},
+            {"Torso", "Right Arm"},
+            {"Torso", "Left Leg"},
+            {"Torso", "Right Leg"},
+        }
+    end
     if not ui.Skeleton or #ui.Skeleton == 0 then
         ui.Skeleton = {}
         for i = 1, #limbPairs do
@@ -1876,7 +2204,6 @@ local function drawSkeleton(player, ui, character, color)
         end
     end
     for _, line in pairs(ui.Skeleton) do if line then line.Thickness = Settings.Visuals.SkeletonThickness; line.Color = color end end
-
     local function getPartPos(partName)
         local part = character:FindFirstChild(partName)
         if part then
@@ -1885,7 +2212,6 @@ local function drawSkeleton(player, ui, character, color)
         end
         return nil
     end
-
     for i, pair in ipairs(limbPairs) do
         local from = getPartPos(pair[1])
         local to = getPartPos(pair[2])
@@ -1908,7 +2234,7 @@ local function getWeaponName(character)
     return ""
 end
 
-local function drawCornerBox(player, ui)
+local function drawCornerBox(player, ui, pos, width, height)
     if not Settings.Visuals.CornerBox then
         if ui.CornerLines then for i = 1, 8 do setVisible(ui.CornerLines[i], false) end end
         return
@@ -1933,31 +2259,10 @@ local function drawCornerBox(player, ui)
             line.Color = color
         end
     end
-    if not (player and player.Character) then
-        for i = 1, 8 do setVisible(ui.CornerLines[i], false) end
-        return
-    end
-    local char = player.Character
-    local root = char:FindFirstChild("HumanoidRootPart")
-    local head = char:FindFirstChild("Head")
-    if not root or not head then
-        for i = 1, 8 do setVisible(ui.CornerLines[i], false) end
-        return
-    end
-    local topPos, topVis = Camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.5, 0))
-    local bottomPos, bottomVis = Camera:WorldToViewportPoint(root.Position - Vector3.new(0, 2, 0))
-    if not topVis or not bottomVis then
-        for i = 1, 8 do setVisible(ui.CornerLines[i], false) end
-        return
-    end
-    local height = math.abs(topPos.Y - bottomPos.Y)
-    local width = height / 2
-    local boxX = topPos.X - width/2
-    local boxY = topPos.Y
-    local tl = Vector2.new(boxX, boxY)
-    local tr = Vector2.new(boxX + width, boxY)
-    local bl = Vector2.new(boxX, boxY + height)
-    local br = Vector2.new(boxX + width, boxY + height)
+    local tl = pos
+    local tr = Vector2.new(pos.X + width, pos.Y)
+    local bl = Vector2.new(pos.X, pos.Y + height)
+    local br = Vector2.new(pos.X + width, pos.Y + height)
     local cornerLength = math.min(width, height) * Settings.Visuals.CornerBoxLengthFactor
     setLine(ui.CornerLines[1], tl, tl + Vector2.new(cornerLength, 0), color)
     setLine(ui.CornerLines[2], tl, tl + Vector2.new(0, cornerLength), color)
@@ -1970,9 +2275,10 @@ local function drawCornerBox(player, ui)
 end
 
 local MAX_STUCK_TIME = 1.5
+local lastHealth = {}
+local targetPulse = 0
 
 RunService.RenderStepped:Connect(function(dt)
-    -- Rainbow update
     if Settings.Visuals.Rainbow then
         local rainbow = getRainbowColor()
         Settings.Visuals.BoxColor = "#" .. rainbow:ToHex()
@@ -1990,24 +2296,62 @@ RunService.RenderStepped:Connect(function(dt)
         Settings.Visuals.EnemyColor = "#" .. rainbow:ToHex()
         Settings.Visuals.TeamColor = "#" .. rainbow:ToHex()
         Settings.Visuals.SnapLinesColor = "#" .. rainbow:ToHex()
+        Settings.Visuals.HitEffectColor = "#" .. rainbow:ToHex()
+        Settings.Aimbot.LockIndicator.Color = "#" .. rainbow:ToHex()
     end
-
     if not Settings.Visuals.Enabled then
         for _, ui in pairs(ESPCache) do if ui then hideESP(ui) end end
         return
     end
-
+    if Settings.Aimbot.LockIndicator.Pulse then
+        targetPulse = targetPulse + dt * 2
+        if targetPulse > 1 then targetPulse = 0 end
+    end
     for player, ui in pairs(ESPCache) do
         if not player or not player.Parent then cleanESP(player); continue end
-        
-        
-
         local character, humanoid, root = findCharacter(player)
         if not character or not humanoid or humanoid.Health <= 0 then
             hideESP(ui); continue
         end
-
-        -- Chams
+        if Settings.Visuals.DamageIndicators or Settings.Visuals.Hitmarkers or Settings.Visuals.HitEffect then
+            local health = humanoid.Health
+            local last = lastHealth[player]
+            if last and last > health then
+                local damage = last - health
+                if Settings.Visuals.DamageIndicators then
+                    local pos, onScreen = Camera:WorldToViewportPoint(character.HumanoidRootPart.Position + Vector3.new(0,3,0))
+                    if onScreen then
+                        table.insert(DamageIndicators, {
+                            Text = tostring(math.floor(damage)),
+                            Position = Vector2.new(pos.X, pos.Y),
+                            Lifetime = 1,
+                            StartTime = tick(),
+                        })
+                    end
+                end
+                if Settings.Visuals.Hitmarkers then
+                    table.insert(Hitmarkers, {
+                        StartTime = tick(),
+                        Lifetime = 0.2,
+                    })
+                end
+                if Settings.Visuals.HitEffect then
+                    local color = hexToColor3(Settings.Visuals.HitEffectColor)
+                    for _, part in ipairs(character:GetDescendants()) do
+                        if part:IsA("BasePart") then
+                            local originalColor = part.Color
+                            part.Color = color
+                            task.delay(0.1, function()
+                                if part and part.Parent then
+                                    part.Color = originalColor
+                                end
+                            end)
+                        end
+                    end
+                end
+            end
+            lastHealth[player] = health
+        end
         if Settings.Visuals.Chams and ui.Chams then
             ui.Chams.Enabled = true
             ui.Chams.FillColor = getPlayerColor(player)
@@ -2015,12 +2359,10 @@ RunService.RenderStepped:Connect(function(dt)
         elseif ui.Chams then
             ui.Chams.Enabled = false
         end
-
         local pos, width, height = getBox(character)
         if not pos then
             hideESP(ui); continue
         end
-
         if ui.LastPosition then
             if (ui.LastPosition - pos).Magnitude < 1 then
                 ui.StuckTime = ui.StuckTime + dt
@@ -2032,46 +2374,41 @@ RunService.RenderStepped:Connect(function(dt)
             end
         end
         ui.LastPosition = pos
-
         local myPos = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
         local dist = myPos and (myPos.Position - root.Position).Magnitude or math.huge
         if dist > Settings.Visuals.MaxDistance then
             hideESP(ui); continue
         end
-
-        
         local displayDist = dist
         if Settings.Visuals.DistanceUnit == "Meters (approx)" then
             displayDist = dist * 0.28
         elseif Settings.Visuals.DistanceUnit == "Feet (approx)" then
             displayDist = dist * 0.92
         end
-
-        
         local boxColor = getPlayerColor(player)
+        if Settings.Aimbot.LockIndicator.Enabled and player == Settings.Aimbot.StickyTarget then
+            local lockColor = hexToColor3(Settings.Aimbot.LockIndicator.Color)
+            if Settings.Aimbot.LockIndicator.Pulse then
+                boxColor = lockColor:Lerp(Color3.new(1,1,1), targetPulse)
+            else
+                boxColor = lockColor
+            end
+        end
         local nameColor = hexToColor3(Settings.Visuals.NameColor)
         local distanceColor = getDistanceColor(dist)
         local tracerColor = hexToColor3(Settings.Visuals.TracerColor)
         local weaponColor = hexToColor3(Settings.Visuals.WeaponColor)
         local healthColor = getHealthColor(humanoid.Health, humanoid.MaxHealth)
-
-        
         if Settings.Visuals.Box then
             setBox(ui.Box, Vector2.new(width, height), pos, boxColor, Settings.Visuals.BoxThickness)
         else
             setVisible(ui.Box, false)
         end
-
-        
         draw3DBox(player, ui, character, boxColor)
-
-        
         if Settings.Visuals.Health then
             local hp = humanoid.Health / humanoid.MaxHealth
             local healthHeight = height * hp
             local healthPos = Settings.Visuals.HealthPosition
-
-            
             if Settings.Visuals.HealthBackground and ui.HealthBackground then
                 if healthPos == "Left" then
                     setLine(ui.HealthBackground, Vector2.new(pos.X - 5, pos.Y + height), Vector2.new(pos.X - 5, pos.Y), Color3.new(0.2,0.2,0.2), 3)
@@ -2083,8 +2420,6 @@ RunService.RenderStepped:Connect(function(dt)
                     setLine(ui.HealthBackground, Vector2.new(pos.X, pos.Y + height + 5), Vector2.new(pos.X + width, pos.Y + height + 5), Color3.new(0.2,0.2,0.2), 3)
                 end
             end
-
-            
             if healthPos == "Left" then
                 setLine(ui.Health, Vector2.new(pos.X - 5, pos.Y + height), Vector2.new(pos.X - 5, pos.Y + height - healthHeight), healthColor, 3)
             elseif healthPos == "Right" then
@@ -2098,8 +2433,6 @@ RunService.RenderStepped:Connect(function(dt)
             setVisible(ui.Health, false)
             setVisible(ui.HealthBackground, false)
         end
-
-        -- Tracer
         if Settings.Visuals.Tracer then
             local startPos
             local origin = Settings.Visuals.TracerOrigin
@@ -2118,12 +2451,16 @@ RunService.RenderStepped:Connect(function(dt)
         else
             setVisible(ui.Tracer, false)
         end
-
-        
         if Settings.Visuals.Name or Settings.Visuals.Distance then
             local iconText = ""
             if Settings.Visuals.TeamIcon then
-                iconText = (player.Team == LocalPlayer.Team) and "🟦 " or "🟥 "
+                if player == LocalPlayer then
+                    iconText = "🟢 "
+                elseif player.Team == LocalPlayer.Team then
+                    iconText = "🔵 "
+                else
+                    iconText = "🔴 "
+                end
             end
             local distText = ""
             if Settings.Visuals.Distance and myPos then
@@ -2135,8 +2472,6 @@ RunService.RenderStepped:Connect(function(dt)
         else
             setVisible(ui.Name, false)
         end
-
-        
         if Settings.Visuals.Weapon then
             local weaponName = getWeaponName(character)
             if weaponName ~= "" then
@@ -2147,32 +2482,20 @@ RunService.RenderStepped:Connect(function(dt)
         else
             setVisible(ui.Weapon, false)
         end
-
-        
         if Settings.Visuals.HealthText then
             local hpPercent = math.floor((humanoid.Health / humanoid.MaxHealth) * 100)
             setText(ui.HealthText, Vector2.new(pos.X - 20, pos.Y + height/2), healthColor, tostring(hpPercent) .. "%")
         else
             setVisible(ui.HealthText, false)
         end
-
-        
         drawSkeleton(player, ui, character, hexToColor3(Settings.Visuals.SkeletonColor))
-
-        
-        drawCornerBox(player, ui)
-
-        
+        drawCornerBox(player, ui, pos, width, height)
         if Settings.Visuals.HeadDot then
             local head = character:FindFirstChild("Head")
             if head then
                 local headPos, headVis = Camera:WorldToViewportPoint(head.Position)
                 if headVis and headPos.Z > 0 then
-                    setCircle(ui.HeadDot,
-                        Vector2.new(headPos.X, headPos.Y),
-                        Settings.Visuals.HeadDotRadius,
-                        hexToColor3(Settings.Visuals.HeadDotColor),
-                        Settings.Visuals.HeadDotFilled)
+                    setCircle(ui.HeadDot, Vector2.new(headPos.X, headPos.Y), Settings.Visuals.HeadDotRadius, hexToColor3(Settings.Visuals.HeadDotColor), Settings.Visuals.HeadDotFilled)
                 else
                     setVisible(ui.HeadDot, false)
                 end
@@ -2182,8 +2505,6 @@ RunService.RenderStepped:Connect(function(dt)
         else
             setVisible(ui.HeadDot, false)
         end
-
-        -- View Angle
         if Settings.Visuals.ViewAngle then
             local head = character:FindFirstChild("Head")
             if head then
@@ -2192,10 +2513,7 @@ RunService.RenderStepped:Connect(function(dt)
                 local startScreen, startVis = Camera:WorldToViewportPoint(head.Position)
                 local endScreen, endVis = Camera:WorldToViewportPoint(endPos)
                 if startVis and endVis then
-                    setLine(ui.ViewAngle,
-                        Vector2.new(startScreen.X, startScreen.Y),
-                        Vector2.new(endScreen.X, endScreen.Y),
-                        hexToColor3(Settings.Visuals.ViewAngleColor), 1)
+                    setLine(ui.ViewAngle, Vector2.new(startScreen.X, startScreen.Y), Vector2.new(endScreen.X, endScreen.Y), hexToColor3(Settings.Visuals.ViewAngleColor), 1)
                 else
                     setVisible(ui.ViewAngle, false)
                 end
@@ -2205,34 +2523,94 @@ RunService.RenderStepped:Connect(function(dt)
         else
             setVisible(ui.ViewAngle, false)
         end
-
-        
         if Settings.Visuals.SnapLines then
             local head = character:FindFirstChild("Head")
             if head then
                 local headPos, onScreen = Camera:WorldToViewportPoint(head.Position)
                 if not onScreen or headPos.Z <= 0 then
-                    
                     local center = Camera.ViewportSize / 2
                     local dir = (head.Position - Camera.CFrame.Position).Unit
-                    local edgePoint = center
-                    
-                    
                     local t = math.huge
-                    if dir.X > 0 then t = math.min(t, (Camera.ViewportSize.X - center.X) / dir.X) end
-                    if dir.X < 0 then t = math.min(t, -center.X / dir.X) end
-                    if dir.Y > 0 then t = math.min(t, (Camera.ViewportSize.Y - center.Y) / dir.Y) end
-                    if dir.Y < 0 then t = math.min(t, -center.Y / dir.Y) end
-                    local edgePos = center + Vector2.new(dir.X, dir.Y) * t * 0.95
-                    setLine(ui.ViewAngle, center, edgePos, hexToColor3(Settings.Visuals.SnapLinesColor), Settings.Visuals.SnapLinesThickness)
+                    local edgePoint
+                    if math.abs(dir.X) > 1e-6 then
+                        if dir.X > 0 then
+                            local tx = (Camera.ViewportSize.X - center.X) / dir.X
+                            if tx < t then t = tx; edgePoint = center + Vector2.new(dir.X, dir.Y) * tx end
+                        else
+                            local tx = -center.X / dir.X
+                            if tx < t then t = tx; edgePoint = center + Vector2.new(dir.X, dir.Y) * tx end
+                        end
+                    end
+                    if math.abs(dir.Y) > 1e-6 then
+                        if dir.Y > 0 then
+                            local ty = (Camera.ViewportSize.Y - center.Y) / dir.Y
+                            if ty < t then t = ty; edgePoint = center + Vector2.new(dir.X, dir.Y) * ty end
+                        else
+                            local ty = -center.Y / dir.Y
+                            if ty < t then t = ty; edgePoint = center + Vector2.new(dir.X, dir.Y) * ty end
+                        end
+                    end
+                    if edgePoint then
+                        setLine(ui.SnapLine, center, edgePoint, hexToColor3(Settings.Visuals.SnapLinesColor), Settings.Visuals.SnapLinesThickness)
+                        setCircle(ui.HeadDot, edgePoint, 3, hexToColor3(Settings.Visuals.SnapLinesColor), true, 1)
+                    end
                 else
-                    setVisible(ui.ViewAngle, false)
+                    setVisible(ui.SnapLine, false)
                 end
             end
         end
     end
+    for i = #DamageIndicators, 1, -1 do
+        local d = DamageIndicators[i]
+        local alpha = 1 - (tick() - d.StartTime) / d.Lifetime
+        if alpha <= 0 then
+            table.remove(DamageIndicators, i)
+        else
+            d.Position = d.Position - Vector2.new(0, 50 * dt)
+            local color = Color3.new(1, 1, 0)
+            local text = Drawing.new("Text")
+            if text then
+                text.Position = d.Position
+                text.Text = d.Text
+                text.Color = color
+                text.Size = 20
+                text.Center = true
+                text.Outline = true
+                text.Visible = true
+                task.delay(0.03, function() text:Remove() end)
+            end
+        end
+    end
+    for i = #Hitmarkers, 1, -1 do
+        local h = Hitmarkers[i]
+        local alpha = 1 - (tick() - h.StartTime) / h.Lifetime
+        if alpha <= 0 then
+            table.remove(Hitmarkers, i)
+        else
+            local center = Camera.ViewportSize / 2
+            local size = 10
+            local color = Color3.new(1, 1, 1)
+            local line1 = Drawing.new("Line")
+            local line2 = Drawing.new("Line")
+            if line1 and line2 then
+                line1.From = center + Vector2.new(-size, -size)
+                line1.To = center + Vector2.new(size, size)
+                line1.Color = color
+                line1.Thickness = 2
+                line1.Visible = true
+                line2.From = center + Vector2.new(-size, size)
+                line2.To = center + Vector2.new(size, -size)
+                line2.Color = color
+                line2.Thickness = 2
+                line2.Visible = true
+                task.delay(0.03, function()
+                    line1:Remove()
+                    line2:Remove()
+                end)
+            end
+        end
+    end
 end)
-
 
 RunService.RenderStepped:Connect(function()
     if Settings.Visuals.Radar and Settings.Visuals.Enabled then
@@ -2240,38 +2618,38 @@ RunService.RenderStepped:Connect(function()
         local size = Settings.Visuals.RadarSize
         setCircle(RadarCircle, center, size/2, Color3.new(1,1,1), false, 1)
         RadarCircle.Visible = true
-
         local myPos = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
         if myPos then
             local look = Camera.CFrame.LookVector
             local angle = math.atan2(-look.X, -look.Z)
-
             for player, ui in pairs(ESPCache) do
-                if player and player.Character then
-                    -- Optionally skip teammates if desired, but we'll draw all
+                if player and player.Character and ui.RadarDot then
                     local root = player.Character:FindFirstChild("HumanoidRootPart")
                     if root then
                         local relPos = root.Position - myPos.Position
                         local rotatedX = relPos.X * math.cos(angle) - relPos.Z * math.sin(angle)
                         local rotatedZ = relPos.X * math.sin(angle) + relPos.Z * math.cos(angle)
                         local rotated = Vector2.new(rotatedX, rotatedZ)
-
                         local scale = (size/2) / 100
                         local screenPos = center + rotated * scale
                         local dir = screenPos - center
                         if dir.Magnitude > size/2 then
                             screenPos = center + dir.Unit * (size/2)
                         end
-                        setCircle(RadarDot, screenPos, 3, getPlayerColor(player), true)
-                        RadarDot.Visible = true
+                        setCircle(ui.RadarDot, screenPos, 3, getPlayerColor(player), true)
+                        ui.RadarDot.Visible = true
                     end
                 end
             end
         end
     else
         setVisible(RadarCircle, false)
-        setVisible(RadarDot, false)
+        for _, ui in pairs(ESPCache) do
+            if ui and ui.RadarDot then
+                setVisible(ui.RadarDot, false)
+            end
+        end
     end
 end)
 
-print("rawr.xyz did it again")
+print("rawr.xyz did it again.")
