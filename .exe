@@ -2653,3 +2653,4 @@ RunService.RenderStepped:Connect(function()
 end)
 
 print("rawr.xyz did it again.")
+print("rawr.xyz initlizied! have fun :3")
