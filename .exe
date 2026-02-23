@@ -1,1 +1,786 @@
+-- rawr.xyz
+-- made by onlyonestands
 
+-- bn
+local Bracket = loadstring(game:HttpGet("https://raw.githubusercontent.com/imcomingforyou6959-gif/rawr.xyz/refs/heads/main/UPI"))()
+
+-- Services
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Camera = workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
+local Workspace = game:GetService("Workspace")
+local Stats = game:GetService("Stats")
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
+
+-- Helper functions
+local function getPing()
+    return Stats.Network.ServerStatsItem["Data Ping"]:GetValue() / 1000
+end
+
+local function hexToColor3(hex)
+    hex = hex:gsub("#", "")
+    local r = tonumber("0x" .. hex:sub(1,2)) / 255
+    local g = tonumber("0x" .. hex:sub(3,4)) / 255
+    local b = tonumber("0x" .. hex:sub(5,6)) / 255
+    return Color3.new(r, g, b)
+end
+
+-- Settings table
+local Settings = {
+    Aimbot = {
+        Enabled = false,
+        Key = "RightButton",
+        KeyEnum = Enum.UserInputType.MouseButton2,
+        Smoothness = 0.3,
+        FOV = 150,
+        ShowFOV = true,
+        FOVColor = Color3.fromRGB(255, 0, 0),
+        TeamCheck = true,
+        VisibleCheck = true,
+        TargetPart = "Head",
+        Prediction = 0.1,
+        AutoPrediction = true,
+    },
+    ESP = {
+        Enabled = false,
+        Box = true,
+        Tracer = true,
+        Health = true,
+        Name = true,
+        Distance = true,
+        BoxColor = "#FF0000",
+        TracerColor = "#FFFFFF",
+        HealthColor = "#00FF00",
+        NameColor = "#FFFFFF",
+        DistanceColor = "#FFFFFF",
+    },
+    Triggerbot = {
+        Enabled = false,
+        Delay = 0,
+    },
+    Misc = {
+        Walkspeed = { Enabled = false, Value = 16 },
+        JumpPower = { Enabled = false, Value = 50 },
+        CFrameSpeed = { Enabled = false, Value = 10 },
+        Sit = false,
+    },
+}
+
+-- Create Window
+local Window = Bracket:Window({
+    Name = "rawr.xyz",
+    Position = UDim2.new(0.5, -250, 0.5, -200),
+    Size = UDim2.new(0, 500, 0, 400),
+    Color = Color3.fromRGB(255, 100, 100),
+    Blur = false,
+})
+
+-- Create Tabs
+local MainTab = Window:Tab({ Name = "Main" })
+local MiscTab = Window:Tab({ Name = "Misc" })
+
+-- upi
+local AimbotSection = MainTab:Section({ Name = "Aimbot", Side = "Left" })
+
+AimbotSection:Toggle({
+    Name = "Enable Aimbot",
+    Flag = "AimbotEnabled",
+    Value = false,
+    Callback = function(v) Settings.Aimbot.Enabled = v end,
+})
+
+AimbotSection:Keybind({
+    Name = "Aimbot Key",
+    Flag = "AimbotKey",
+    Value = Settings.Aimbot.Key,
+    Mouse = true,
+    Callback = function(key, pressed, toggle)
+        if pressed and not toggle then
+            Settings.Aimbot.Key = key
+            local success, result = pcall(function()
+                if key:find("Button") then
+                    return Enum.UserInputType[key]
+                else
+                    return Enum.KeyCode[key]
+                end
+            end)
+            if success then Settings.Aimbot.KeyEnum = result end
+        end
+    end,
+})
+
+AimbotSection:Slider({
+    Name = "FOV Size",
+    Flag = "AimbotFOV",
+    Min = 50,
+    Max = 500,
+    Value = Settings.Aimbot.FOV,
+    Precise = 0,
+    Callback = function(v) Settings.Aimbot.FOV = v end,
+})
+
+AimbotSection:Slider({
+    Name = "Smoothness",
+    Flag = "AimbotSmoothness",
+    Min = 10,
+    Max = 80,
+    Value = Settings.Aimbot.Smoothness * 100,
+    Precise = 0,
+    Callback = function(v) Settings.Aimbot.Smoothness = v / 100 end,
+})
+
+AimbotSection:Slider({
+    Name = "Prediction (ms)",
+    Flag = "AimbotPrediction",
+    Min = 0,
+    Max = 500,
+    Value = Settings.Aimbot.Prediction * 1000,
+    Precise = 0,
+    Callback = function(v) Settings.Aimbot.Prediction = v / 1000 end,
+})
+
+AimbotSection:Toggle({
+    Name = "Auto Prediction",
+    Flag = "AimbotAutoPrediction",
+    Value = Settings.Aimbot.AutoPrediction,
+    Callback = function(v) Settings.Aimbot.AutoPrediction = v end,
+})
+
+AimbotSection:Toggle({
+    Name = "Show FOV Circle",
+    Flag = "AimbotShowFOV",
+    Value = Settings.Aimbot.ShowFOV,
+    Callback = function(v) Settings.Aimbot.ShowFOV = v end,
+})
+
+AimbotSection:Colorpicker({
+    Name = "FOV Color",
+    Flag = "AimbotFOVColor",
+    Value = {0, 1, 1, 0, false},
+    Callback = function(tbl, color) Settings.Aimbot.FOVColor = color end,
+})
+
+AimbotSection:Toggle({
+    Name = "Team Check",
+    Flag = "AimbotTeamCheck",
+    Value = Settings.Aimbot.TeamCheck,
+    Callback = function(v) Settings.Aimbot.TeamCheck = v end,
+})
+
+AimbotSection:Toggle({
+    Name = "Visible Check",
+    Flag = "AimbotVisibleCheck",
+    Value = Settings.Aimbot.VisibleCheck,
+    Callback = function(v) Settings.Aimbot.VisibleCheck = v end,
+})
+
+AimbotSection:Dropdown({
+    Name = "Target Part",
+    Flag = "AimbotTargetPart",
+    List = {
+        { Name = "Head", Mode = "Button" },
+        { Name = "HumanoidRootPart", Mode = "Button" },
+        { Name = "UpperTorso", Mode = "Button" },
+        { Name = "LowerTorso", Mode = "Button" },
+    },
+    Callback = function(selected) Settings.Aimbot.TargetPart = selected[1] end,
+})
+
+-- es3
+local ESPSection = MainTab:Section({ Name = "ESP", Side = "Right" })
+
+ESPSection:Toggle({
+    Name = "Enable ESP",
+    Flag = "ESPEnabled",
+    Value = false,
+    Callback = function(v) Settings.ESP.Enabled = v end,
+})
+
+ESPSection:Toggle({
+    Name = "Box",
+    Flag = "ESPBox",
+    Value = true,
+    Callback = function(v) Settings.ESP.Box = v end,
+})
+
+ESPSection:Colorpicker({
+    Name = "Box Color",
+    Flag = "ESPBoxColor",
+    Value = {0, 1, 1, 0, false},
+    Callback = function(tbl, color) Settings.ESP.BoxColor = "#" .. color:ToHex() end,
+})
+
+ESPSection:Toggle({
+    Name = "Tracer",
+    Flag = "ESPTracer",
+    Value = true,
+    Callback = function(v) Settings.ESP.Tracer = v end,
+})
+
+ESPSection:Colorpicker({
+    Name = "Tracer Color",
+    Flag = "ESPTracerColor",
+    Value = {0, 0, 1, 0, false},
+    Callback = function(tbl, color) Settings.ESP.TracerColor = "#" .. color:ToHex() end,
+})
+
+ESPSection:Toggle({
+    Name = "Health Bar",
+    Flag = "ESPHealth",
+    Value = true,
+    Callback = function(v) Settings.ESP.Health = v end,
+})
+
+ESPSection:Colorpicker({
+    Name = "Health Color",
+    Flag = "ESPHealthColor",
+    Value = {0.333, 1, 1, 0, false},
+    Callback = function(tbl, color) Settings.ESP.HealthColor = "#" .. color:ToHex() end,
+})
+
+ESPSection:Toggle({
+    Name = "Name",
+    Flag = "ESPName",
+    Value = true,
+    Callback = function(v) Settings.ESP.Name = v end,
+})
+
+ESPSection:Colorpicker({
+    Name = "Name Color",
+    Flag = "ESPNameColor",
+    Value = {0, 0, 1, 0, false},
+    Callback = function(tbl, color) Settings.ESP.NameColor = "#" .. color:ToHex() end,
+})
+
+ESPSection:Toggle({
+    Name = "Distance",
+    Flag = "ESPDistance",
+    Value = true,
+    Callback = function(v) Settings.ESP.Distance = v end,
+})
+
+ESPSection:Colorpicker({
+    Name = "Distance Color",
+    Flag = "ESPDistanceColor",
+    Value = {0, 0, 1, 0, false},
+    Callback = function(tbl, color) Settings.ESP.DistanceColor = "#" .. color:ToHex() end,
+})
+
+-- 556
+local TriggerSection = MainTab:Section({ Name = "Triggerbot", Side = "Left" })
+
+TriggerSection:Toggle({
+    Name = "Enable Triggerbot",
+    Flag = "TriggerbotEnabled",
+    Value = false,
+    Callback = function(v) Settings.Triggerbot.Enabled = v end,
+})
+
+TriggerSection:Slider({
+    Name = "Trigger Delay (ms)",
+    Flag = "TriggerbotDelay",
+    Min = 0,
+    Max = 500,
+    Value = 0,
+    Precise = 0,
+    Callback = function(v) Settings.Triggerbot.Delay = v end,
+})
+
+-- MSC
+local MiscSection = MiscTab:Section({ Name = "Movement", Side = "Left" })
+
+MiscSection:Toggle({
+    Name = "Walkspeed",
+    Flag = "WalkspeedEnabled",
+    Value = false,
+    Callback = function(v) Settings.Misc.Walkspeed.Enabled = v end,
+})
+
+MiscSection:Slider({
+    Name = "Walkspeed Value",
+    Flag = "Walkspeed",
+    Min = 16,
+    Max = 200,
+    Value = 16,
+    Precise = 0,
+    Callback = function(v) Settings.Misc.Walkspeed.Value = v end,
+})
+
+MiscSection:Toggle({
+    Name = "Jump Power",
+    Flag = "JumpEnabled",
+    Value = false,
+    Callback = function(v) Settings.Misc.JumpPower.Enabled = v end,
+})
+
+MiscSection:Slider({
+    Name = "Jump Power Value",
+    Flag = "JumpPower",
+    Min = 50,
+    Max = 200,
+    Value = 50,
+    Precise = 0,
+    Callback = function(v) Settings.Misc.JumpPower.Value = v end,
+})
+
+MiscSection:Toggle({
+    Name = "CFrame Speed",
+    Flag = "CFrameSpeedEnabled",
+    Value = false,
+    Callback = function(v) Settings.Misc.CFrameSpeed.Enabled = v end,
+})
+
+MiscSection:Slider({
+    Name = "CFrame Speed Value",
+    Flag = "CFrameSpeed",
+    Min = 1,
+    Max = 100,
+    Value = 10,
+    Precise = 0,
+    Callback = function(v) Settings.Misc.CFrameSpeed.Value = v end,
+})
+
+MiscSection:Toggle({
+    Name = "Force Sit",
+    Flag = "ForceSit",
+    Value = false,
+    Callback = function(v) Settings.Misc.Sit = v end,
+})
+
+-- Server utilities section
+local ServerSection = MiscTab:Section({ Name = "Server", Side = "Right" })
+
+ServerSection:Button({
+    Name = "Rejoin Server",
+    Callback = function()
+        TeleportService:Teleport(game.PlaceId, LocalPlayer)
+    end,
+})
+
+ServerSection:Button({
+    Name = "Server Hop",
+    Callback = function()
+        local servers = HttpService:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?limit=100"))
+        for _, server in ipairs(servers.data) do
+            if server.playing < server.maxPlayers then
+                TeleportService:TeleportToPlaceInstance(game.PlaceId, server.id, LocalPlayer)
+                break
+            end
+        end
+    end,
+})
+
+ServerSection:Button({
+    Name = "Copy Place ID",
+    Callback = function()
+        setclipboard(tostring(game.PlaceId))
+    end,
+})
+
+ServerSection:Button({
+    Name = "Copy Job ID",
+    Callback = function()
+        setclipboard(game.JobId)
+    end,
+})
+
+ServerSection:Button({
+    Name = "Copy Join Script",
+    Callback = function()
+        setclipboard('game:GetService("TeleportService"):Teleport(' .. game.PlaceId .. ', game:GetService("Players").LocalPlayer)')
+    end,
+})
+
+-- Bv
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Visible = false
+FOVCircle.Thickness = 2
+FOVCircle.NumSides = 60
+FOVCircle.Filled = false
+
+-- ABL
+local function IsEnemy(player)
+    if player == LocalPlayer then return false end
+    if Settings.Aimbot.TeamCheck then
+        if player.TeamColor == LocalPlayer.TeamColor or (player.Team and LocalPlayer.Team and player.Team == LocalPlayer.Team) then
+            return false
+        end
+    end
+    return true
+end
+
+local function IsVisible(targetPart)
+    local origin = Camera.CFrame.Position
+    local direction = targetPart.Position - origin
+    local rayParams = RaycastParams.new()
+    rayParams.FilterType = Enum.RaycastFilterType.Blacklist
+    rayParams.FilterDescendantsInstances = {LocalPlayer.Character}
+    local result = workspace:Raycast(origin, direction, rayParams)
+    return not result or result.Instance:IsDescendantOf(targetPart.Parent)
+end
+
+local function GetTargetPart(character)
+    if not character then return nil end
+    local part = character:FindFirstChild(Settings.Aimbot.TargetPart)
+    if not part then
+        part = character:FindFirstChild("Head") or character:FindFirstChild("HumanoidRootPart")
+    end
+    return part
+end
+
+local function GetPredictedPosition(part)
+    if not part then return part.Position end
+    local pred = Settings.Aimbot.Prediction
+    if Settings.Aimbot.AutoPrediction then
+        local speed = part.Velocity.Magnitude
+        if speed > 5 and speed < 200 then
+            pred = pred * (speed / 50) + getPing()
+        else
+            pred = pred + getPing()
+        end
+    end
+    return part.Position + part.Velocity * pred
+end
+
+local function GetClosestTarget()
+    local closest = nil
+    local closestDist = Settings.Aimbot.FOV
+    local screenCenter = Camera.ViewportSize / 2
+
+    for _, player in pairs(Players:GetPlayers()) do
+        if not IsEnemy(player) then continue end
+        if not player.Character then continue end
+        local targetPart = GetTargetPart(player.Character)
+        if not targetPart then continue end
+
+        if Settings.Aimbot.VisibleCheck and not IsVisible(targetPart) then
+            continue
+        end
+
+        local targetPos = GetPredictedPosition(targetPart)
+        local screenPos, onScreen = Camera:WorldToViewportPoint(targetPos)
+        if not onScreen or screenPos.Z <= 0 then continue end
+
+        local dist = (Vector2.new(screenPos.X, screenPos.Y) - screenCenter).Magnitude
+        if dist > Settings.Aimbot.FOV then continue end
+
+        if dist < closestDist then
+            closestDist = dist
+            closest = targetPart
+        end
+    end
+    return closest
+end
+
+local aimbotKeyPressed = false
+local function updateKeyState()
+    local key = Settings.Aimbot.KeyEnum
+    if not key then return end
+    if typeof(key) == "EnumItem" then
+        if key.Name:find("Button") then
+            aimbotKeyPressed = UserInputService:IsMouseButtonPressed(key)
+        else
+            aimbotKeyPressed = UserInputService:IsKeyDown(key)
+        end
+    else
+        aimbotKeyPressed = false
+    end
+end
+
+-- TB2
+local lastTriggerTime = 0
+local function doTrigger()
+    if not Settings.Triggerbot.Enabled then return end
+    local targetPart = GetClosestTarget()
+    if targetPart then
+        local targetPos = GetPredictedPosition(targetPart)
+        local screenPos = Camera:WorldToViewportPoint(targetPos)
+        local screenCenter = Camera.ViewportSize / 2
+        local dist = (Vector2.new(screenPos.X, screenPos.Y) - screenCenter).Magnitude
+        if dist < 10 then
+            local now = tick()
+            if now - lastTriggerTime > Settings.Triggerbot.Delay / 1000 then
+                lastTriggerTime = now
+                mouse1press()
+                task.wait(0.02)
+                mouse1release()
+            end
+        end
+    end
+end
+
+-- 223
+local function updateMovement()
+    if LocalPlayer.Character then
+        local hum = LocalPlayer.Character:FindFirstChild("Humanoid")
+        if hum then
+            if Settings.Misc.Walkspeed.Enabled then
+                hum.WalkSpeed = Settings.Misc.Walkspeed.Value
+            end
+            if Settings.Misc.JumpPower.Enabled then
+                hum.JumpPower = Settings.Misc.JumpPower.Value
+            end
+        end
+    end
+end
+
+local function updateCFrameSpeed()
+    if not Settings.Misc.CFrameSpeed.Enabled then return end
+    if not LocalPlayer.Character then return end
+    local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+        hrp.CFrame = hrp.CFrame + Camera.CFrame.LookVector * Settings.Misc.CFrameSpeed.Value
+    end
+    if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+        hrp.CFrame = hrp.CFrame - Camera.CFrame.LookVector * Settings.Misc.CFrameSpeed.Value
+    end
+    if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+        hrp.CFrame = hrp.CFrame - Camera.CFrame.RightVector * Settings.Misc.CFrameSpeed.Value
+    end
+    if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+        hrp.CFrame = hrp.CFrame + Camera.CFrame.RightVector * Settings.Misc.CFrameSpeed.Value
+    end
+end
+
+local function updateSit()
+    if Settings.Misc.Sit and LocalPlayer.Character then
+        local hum = LocalPlayer.Character:FindFirstChild("Humanoid")
+        if hum then hum.Sit = true end
+    end
+end
+
+-- ML1
+RunService.RenderStepped:Connect(function()
+    -- FOV Circle
+    if Settings.Aimbot.ShowFOV and Settings.Aimbot.Enabled then
+        FOVCircle.Visible = true
+        FOVCircle.Radius = Settings.Aimbot.FOV
+        FOVCircle.Color = Settings.Aimbot.FOVColor
+        FOVCircle.Position = Camera.ViewportSize / 2
+    else
+        FOVCircle.Visible = false
+    end
+
+    updateKeyState()
+
+    local targetPart = nil
+    if Settings.Aimbot.Enabled and aimbotKeyPressed then
+        targetPart = GetClosestTarget()
+    end
+
+    if targetPart then
+        local targetPos = GetPredictedPosition(targetPart)
+        local camPos = Camera.CFrame.Position
+        local targetCF = CFrame.lookAt(camPos, targetPos)
+        Camera.CFrame = Camera.CFrame:Lerp(targetCF, Settings.Aimbot.Smoothness)
+    end
+
+    doTrigger()
+    updateMovement()
+    updateCFrameSpeed()
+    updateSit()
+end)
+
+-- opi
+local ESPCache = {}
+local MAX_STUCK_TIME = 1.5
+local drawingKeys = {"Box", "Tracer", "Health", "Name"} -- only these are Drawing objects
+
+local function hideESP(ui)
+    for _, key in ipairs(drawingKeys) do
+        if ui[key] then ui[key].Visible = false end
+    end
+    ui.LastPosition = nil
+    ui.StuckTime = 0
+end
+
+local function cleanESP(player)
+    if ESPCache[player] then
+        for _, key in ipairs(drawingKeys) do
+            local obj = ESPCache[player][key]
+            if obj and obj.Remove then
+                pcall(obj.Remove, obj)
+            end
+        end
+        ESPCache[player] = nil
+    end
+end
+
+local function createESP(player)
+    if player == LocalPlayer then return end
+    if ESPCache[player] then return end -- already exists
+
+    local ui = {
+        Box = Drawing.new("Square"),
+        Tracer = Drawing.new("Line"),
+        Health = Drawing.new("Line"),
+        Name = Drawing.new("Text"),
+        LastPosition = nil,
+        StuckTime = 0,
+    }
+    ui.Box.Thickness = 1
+    ui.Box.Filled = false
+    ui.Box.Visible = false
+
+    ui.Tracer.Thickness = 1
+    ui.Tracer.Visible = false
+
+    ui.Health.Thickness = 3
+    ui.Health.Visible = false
+
+    ui.Name.Size = 13
+    ui.Name.Center = true
+    ui.Name.Outline = true
+    ui.Name.Font = 2
+    ui.Name.Visible = false
+
+    ESPCache[player] = ui
+
+    -- HESP2
+    player.CharacterRemoving:Connect(function()
+        if ESPCache[player] then
+            hideESP(ESPCache[player])
+        end
+    end)
+end
+
+for _, p in pairs(Players:GetPlayers()) do createESP(p) end
+Players.PlayerAdded:Connect(createESP)
+Players.PlayerRemoving:Connect(cleanESP)
+
+local function findCharacter(player)
+    for _, model in ipairs(workspace:GetChildren()) do
+        if model:IsA("Model") and model.Name == player.Name then
+            local hum = model:FindFirstChildOfClass("Humanoid")
+            local root = model:FindFirstChild("HumanoidRootPart")
+            if hum and root then
+                return model, hum, root
+            end
+        end
+    end
+    return nil
+end
+
+local function getBox(character)
+    -- T3
+    local cf, size = character:GetBoundingBox()
+    local top = cf.Position + Vector3.new(0, size.Y/2, 0)
+    local bottom = cf.Position - Vector3.new(0, size.Y/2, 0)
+    local topPos, vis1 = Camera:WorldToViewportPoint(top)
+    local bottomPos, vis2 = Camera:WorldToViewportPoint(bottom)
+    if not vis1 or not vis2 then return nil end
+    local height = math.abs(topPos.Y - bottomPos.Y)
+    local width = height / 2
+    return Vector2.new(topPos.X - width/2, topPos.Y), width, height
+end
+
+RunService.RenderStepped:Connect(function(dt)
+    if not Settings.ESP.Enabled then
+        for _, ui in pairs(ESPCache) do
+            if ui then hideESP(ui) end
+        end
+        return
+    end
+
+    for player, ui in pairs(ESPCache) do
+        -- Player left
+        if not player or not player.Parent then
+            cleanESP(player)
+            continue
+        end
+
+        -- Team check
+        if Settings.Aimbot.TeamCheck and player.Team == LocalPlayer.Team then
+            hideESP(ui)
+            continue
+        end
+
+        local character, humanoid, root = findCharacter(player)
+        if not character or not humanoid or humanoid.Health <= 0 then
+            hideESP(ui)
+            continue
+        end
+
+        local pos, width, height = getBox(character)
+        if not pos then
+            hideESP(ui)
+            continue
+        end
+
+        -- AS2
+        if ui.LastPosition then
+            if (ui.LastPosition - pos).Magnitude < 1 then
+                ui.StuckTime = ui.StuckTime + dt
+            else
+                ui.StuckTime = 0
+            end
+            if ui.StuckTime >= MAX_STUCK_TIME then
+                hideESP(ui)
+                continue
+            end
+        end
+        ui.LastPosition = pos
+
+        -- BESP2
+        if Settings.ESP.Box then
+            ui.Box.Size = Vector2.new(width, height)
+            ui.Box.Position = pos
+            ui.Box.Color = hexToColor3(Settings.ESP.BoxColor)
+            ui.Box.Visible = true
+        else
+            ui.Box.Visible = false
+        end
+
+        -- HB2
+        if Settings.ESP.Health then
+            local hp = humanoid.Health / humanoid.MaxHealth
+            local healthHeight = height * hp
+            ui.Health.From = Vector2.new(pos.X - 5, pos.Y + height)
+            ui.Health.To = Vector2.new(pos.X - 5, pos.Y + height - healthHeight)
+            ui.Health.Color = hexToColor3(Settings.ESP.HealthColor)
+            ui.Health.Visible = true
+        else
+            ui.Health.Visible = false
+        end
+
+        -- T2
+        if Settings.ESP.Tracer then
+            ui.Tracer.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y)
+            ui.Tracer.To = Vector2.new(pos.X + width/2, pos.Y)
+            ui.Tracer.Color = hexToColor3(Settings.ESP.TracerColor)
+            ui.Tracer.Visible = true
+        else
+            ui.Tracer.Visible = false
+        end
+
+        -- 2
+        if Settings.ESP.Name or Settings.ESP.Distance then
+            local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            local distText = ""
+            if myRoot then
+                local dist = (myRoot.Position - root.Position).Magnitude
+                distText = " [" .. math.floor(dist) .. "m]"
+            end
+            if Settings.ESP.Name and Settings.ESP.Distance then
+                ui.Name.Text = player.Name .. distText
+            elseif Settings.ESP.Name then
+                ui.Name.Text = player.Name
+            elseif Settings.ESP.Distance then
+                ui.Name.Text = distText
+            else
+                ui.Name.Visible = false
+            end
+            ui.Name.Position = Vector2.new(pos.X + width/2, pos.Y - 15)
+            ui.Name.Color = hexToColor3(Settings.ESP.NameColor)
+            ui.Name.Visible = (Settings.ESP.Name or Settings.ESP.Distance)
+        else
+            ui.Name.Visible = false
+        end
+    end
+end)
+
+print("rawr.xyz loaded - Aimbot, ESP, Triggerbot, Misc")
